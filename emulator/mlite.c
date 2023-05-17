@@ -36,6 +36,10 @@
 
 long long cycle_counter;
 
+static unsigned long long op_counter[0xFF];
+static unsigned long long func_counter[0xFF];
+static unsigned long long rt_counter[0xFF];
+
 void Sleep(unsigned int value)
 { 
    usleep(value * 1000);
@@ -222,6 +226,10 @@ static void mem_write(State *s, int size, int unsigned address, unsigned int val
    switch(address)
    {
       case UART_WRITE: 
+         if (((value & 0xFF) >> 0) == 0xFE) {
+             s->wakeup = 1;
+             printf("Done\n");
+         }
          putch(value); 
          fflush(stdout);
          return;
@@ -666,6 +674,16 @@ void cycle(State *s, int show_mode)
       return;
    }
    rSave = r[rt];
+
+   op_counter[op] += 1;
+   if (op == 0x00) {
+       func_counter[func] += 1;
+   }
+
+   if (op == 0x01) {
+       rt_counter[rt] += 1;
+   }
+
    switch(op) 
    {
       case 0x00:/*SPECIAL*/
@@ -906,8 +924,26 @@ void do_debug(State *s)
             }
             cycle(s, 0);
          }
+         for (int op = 0; op < 0xFF; op += 1) {
+             if (op_counter[op] == 0) {
+                 continue;
+             }
+             printf("Op: %s (0x%02x) - %lld\n", opcode_string[op], op, op_counter[op]);  
+         }
+         for (int func = 0; func < 0xFF; func += 1) {
+             if (func_counter[func] == 0) {
+                 continue;
+             }
+             printf("Func: %s (0x%02x) - %lld\n", special_string[func], func, func_counter[func]);  
+         }
+         for (int rt = 0; rt < 0xFF; rt += 1) {
+             if (rt_counter[rt] == 0) {
+                 continue;
+             }
+             printf("Rt: %s (0x%02x) - %lld\n", regimm_string[rt], rt, rt_counter[rt]);  
+         }
          show_state(s);
-         break;
+         return;
       case 'G':
          s->wakeup = 0;
          cycle(s, 1);
@@ -946,6 +982,7 @@ void do_debug(State *s)
          fwrite(s->mem,1,FLASH_SIZE,f);
          fclose(f);
       }
+
    }
 }
 /************************************************************/
