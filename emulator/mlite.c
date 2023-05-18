@@ -117,6 +117,7 @@ typedef struct {
    int irqStatus;
    int skip;
    unsigned char *mem;
+  unsigned int *mem_access;
    int wakeup;
    int big_endian;
    MmuEntry mmuEntry[MMU_ENTRIES];
@@ -495,8 +496,10 @@ static int cacheTry, cacheMiss, cacheInit;
 
 static int cache_read(State *s, int size, unsigned int address)
 {
+  s->mem_access[address % MEM_SIZE]++;
    int offset;
    unsigned int value, value2, address2=address;
+   
 
    if(cacheInit == 0)
    {
@@ -511,6 +514,7 @@ static int cache_read(State *s, int size, unsigned int address)
 
    ++cacheTry;
    offset = (address >> 2) & 0x3ff;
+   
    if(cacheAddr[offset] != (address >> 12) || cacheAddr[offset] == CACHE_MISS)
    {
       ++cacheMiss;
@@ -540,6 +544,8 @@ static int cache_read(State *s, int size, unsigned int address)
 
 static void cache_write(State *s, int size, int unsigned address, unsigned int value)
 {
+  
+  s->mem_access[address % MEM_SIZE]++;
    int offset;
 
    mem_write(s, size, address, value);
@@ -997,6 +1003,8 @@ int main(int argc,char *argv[])
    s->big_endian = 1;
    s->mem = (unsigned char*)malloc(MEM_SIZE);
    memset(s->mem, 0, MEM_SIZE);
+   s->mem_access = (unsigned int*)malloc(sizeof(unsigned int) * MEM_SIZE);
+   memset(s->mem_access, 0, sizeof(unsigned int) * MEM_SIZE);
    if(argc <= 1) 
    {
       printf("   Usage:  mlite file.exe\n");
@@ -1059,7 +1067,23 @@ int main(int argc,char *argv[])
    if(index == 0xffffffff)
       s->pc = 0x10000000 + FLASH_SIZE;
    do_debug(s);
+   printf("t: %i m: %i r: %f", cacheTry, cacheMiss, 1.0f -(float)cacheMiss/(float)cacheTry);
+
+   FILE *file = fopen("mem_access.txt", "w");
+   if (file == NULL) {
+        printf("Error opening file.\n");
+        return 1;
+    }
+
+   for (int i = 0; i < MEM_SIZE; i++) {
+     if (s->mem_access[i] > 0)
+       fprintf(file, "%d %d\n", i, s->mem_access[i]);
+   }
+
+   fclose(file);
+   
    free(s->mem);
+   free(s->mem_access);
    return(0);
 }
 
