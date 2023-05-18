@@ -46,7 +46,7 @@ x_axis = np.arange(len(adds_counter.keys()))
 
 plt.bar(x_axis-0.2, adds_counter.values(), color='b', label='Adds',width=0.2)
 
-plt.bar(x_axis, mults_counter.values(), color='r', label='Mults', width=0.2)
+plt.bar(x_axis, [32*x for x in mults_counter.values()], color='r', label='Mults', width=0.2)
 
 plt.bar(x_axis+0.2, memory_counter.values(), color='g', label='Mem', width=0.2)
 
