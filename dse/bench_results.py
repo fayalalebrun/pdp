@@ -7,7 +7,7 @@ import time
 
 folder = sys.argv[1]
 dropbox_path = os.path.expanduser("~/Dropbox/group29/")
-arm_app_path = "../appARMcpu.elf"
+arm_app_path = "../../appARMcpu.elf"
 
 results_path = dropbox_path + "results.txt"
 log_path = dropbox_path + "log.txt"

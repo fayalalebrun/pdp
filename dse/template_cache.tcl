@@ -18,3 +18,4 @@ wait_on_run impl_1
 open_run impl_1
 report_utilization -cells design_2_i/cpu_0 -file {${utilization_path}}
 report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -file {${timing_path}}
+write_hw_platform -fixed -include_bit -force -file {${xsa_path}}
