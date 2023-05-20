@@ -490,9 +490,28 @@ static void cache_init(void) {}
 
 //Write through direct mapped 4KB cache
 #define CACHE_MISS 0x1ff
-static unsigned int cacheData[1024];
-static unsigned int cacheAddr[1024]; //9-bit addresses
+#define CACHE_INDEX_WIDTH 9
+#define CACHE_SIZE (1 << CACHE_INDEX_WIDTH)
+#define CACHE_WAY_WIDTH 1
+#define CACHE_WAYS (1 << CACHE_WAY_WIDTH)
+#define RR 0
+#define NLU 1
+#define REPLACEMENT_POLICY RR
+static unsigned int cacheData[CACHE_SIZE][CACHE_WAYS];
+static unsigned int cacheAddr[CACHE_SIZE][CACHE_WAYS];
+static unsigned int lastWay[CACHE_SIZE];
 static int cacheTry, cacheMiss, cacheInit;
+
+
+static unsigned int choose_way(int offset) {
+  if (REPLACEMENT_POLICY == RR) {
+      return rand() % CACHE_WAYS;
+  } else if (REPLACEMENT_POLICY == NLU) {
+      return (lastWay[offset] + 1) % CACHE_WAYS;
+  } else {
+    return 0;
+  }
+}
 
 static int cache_read(State *s, int size, unsigned int address)
 {
@@ -504,8 +523,9 @@ static int cache_read(State *s, int size, unsigned int address)
    if(cacheInit == 0)
    {
       cacheInit = 1;
-      for(offset = 0; offset < 1024; ++offset)
-         cacheAddr[offset] = CACHE_MISS;
+      for(offset = 0; offset < CACHE_SIZE; ++offset)
+	for(int way = 0; way < CACHE_WAYS; way++)
+         cacheAddr[offset][way] = CACHE_MISS;
    }
 
    offset = address >> 20;
@@ -513,15 +533,28 @@ static int cache_read(State *s, int size, unsigned int address)
       return mem_read(s, size, address);
 
    ++cacheTry;
-   offset = (address >> 2) & 0x3ff;
-   
-   if(cacheAddr[offset] != (address >> 12) || cacheAddr[offset] == CACHE_MISS)
-   {
-      ++cacheMiss;
-      cacheAddr[offset] = address >> 12;
-      cacheData[offset] = mem_read(s, 4, address & ~3);
+   offset = (address >> 2) & (0xffffffff >> (32 - CACHE_INDEX_WIDTH));
+
+   int miss = 1;
+   unsigned int way = 0;
+   for (int w = 0; w < CACHE_WAYS; w++) {
+     if(cacheAddr[offset][w] == (address >> (CACHE_INDEX_WIDTH + 2)) && cacheAddr[offset][w] != CACHE_MISS)
+       {
+	 miss = 0;
+	 way = w;
+	 lastWay[offset] = w;
+	 break;
+       }
    }
-   value = cacheData[offset];
+
+   if (miss == 1) {
+     way = choose_way(offset);
+     ++cacheMiss;
+     cacheAddr[offset][way] = address >> (CACHE_INDEX_WIDTH + 2);
+     cacheData[offset][way] = mem_read(s, 4, address & ~3);
+   }
+   
+   value = cacheData[offset][way];
    if(s->big_endian)
       address ^= 3;
    switch(size) 
@@ -554,14 +587,29 @@ static void cache_write(State *s, int size, int unsigned address, unsigned int v
    if(offset != 0x100 && offset != 0x101)
       return;
 
-   offset = (address >> 2) & 0x3ff;
-   if(size != 4)
-   {
-      cacheAddr[offset] = CACHE_MISS;
-      return;
+   offset = (address >> 2) & (0xffffffff >> (32 - CACHE_INDEX_WIDTH));
+     
+   unsigned int tag = address >> (CACHE_INDEX_WIDTH + 2);
+
+   if(size != 4) {
+     for (int i = 0; i < CACHE_WAYS; i++) 
+       if (cacheAddr[offset][i] == tag) {
+	   cacheAddr[offset][i] = CACHE_MISS;
+	   return;
+	 }
+     return;
    }
-   cacheAddr[offset] = address >> 12;
-   cacheData[offset] = value;
+
+   for (int w = 0; w < CACHE_WAYS; w++)
+     if (cacheAddr[offset][w] == tag) {
+       cacheData[offset][w] = value;
+       lastWay[offset] = w;
+       return;
+     }
+   
+   unsigned int way = choose_way(offset);
+   cacheAddr[offset][way] = address >> (CACHE_INDEX_WIDTH + 2);
+   cacheData[offset][way] = value;
 }
 
 #define mem_read cache_read
