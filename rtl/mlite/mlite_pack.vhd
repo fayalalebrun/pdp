@@ -239,7 +239,9 @@ package mlite_pack is
    end component;
 
    component control 
-      port(opcode       : in  std_logic_vector(31 downto 0);
+      port(clk          : in  std_logic;
+           reset_in     : in  std_logic;
+           opcode       : in  std_logic_vector(31 downto 0);
            intr_signal  : in  std_logic;
            rs_index     : out std_logic_vector(5 downto 0);
            rt_index     : out std_logic_vector(5 downto 0);

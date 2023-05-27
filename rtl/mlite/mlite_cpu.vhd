@@ -28,11 +28,12 @@
 --    3.  "Mem_ctrl" passes the opcode to the "control" entity.
 --    4.  "Control" converts the 32-bit opcode to a 60-bit VLWI opcode
 --        and sends control signals to the other entities.
+-- Stage #3:
 --    5.  Based on the rs_index and rt_index control signals, "reg_bank" 
 --        sends the 32-bit reg_source and reg_target to "bus_mux".
 --    6.  Based on the a_source and b_source control signals, "bus_mux"
 --        multiplexes reg_source onto a_bus and reg_target onto b_bus.
--- Stage #3 (part of stage #2 if using two stage pipeline):
+-- Stage #4
 --    7.  Based on the alu_func control signals, "alu" adds the values
 --        from a_bus and b_bus and places the result on c_bus.
 --    8.  Based on the c_source control signals, "bus_bux" multiplexes
@@ -218,22 +219,24 @@ begin  --architecture
         data_r       => data_r);
 
    u3_control: control PORT MAP (
-        opcode       => opcode,
-        intr_signal  => intr_signal,
-        rs_index     => rs_index,
-        rt_index     => rt_index,
-        rd_index     => rd_index,
-        imm_out      => imm,
-        alu_func     => alu_func,
-        shift_func   => shift_func,
-        mult_func    => mult_func,
-        branch_func  => branch_func,
-        a_source_out => a_source,
-        b_source_out => b_source,
-        c_source_out => c_source,
-        pc_source_out=> pc_source,
-        mem_source_out=> mem_source,
-        exception_out=> exception_sig);
+        clk            => clk,
+        reset_in       => reset,
+        opcode         => opcode,
+        intr_signal    => intr_signal,
+        rs_index       => rs_index,
+        rt_index       => rt_index,
+        rd_index       => rd_index,
+        imm_out        => imm,
+        alu_func       => alu_func,
+        shift_func     => shift_func,
+        mult_func      => mult_func,
+        branch_func    => branch_func,
+        a_source_out   => a_source,
+        b_source_out   => b_source,
+        c_source_out   => c_source,
+        pc_source_out  => pc_source,
+        mem_source_out => mem_source,
+        exception_out  => exception_sig);
 
    u4_reg_bank: reg_bank 
       generic map(memory_type => memory_type)

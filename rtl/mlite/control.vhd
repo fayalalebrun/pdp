@@ -25,32 +25,50 @@ use ieee.std_logic_1164.all;
 use work.mlite_pack.all;
 
 entity control is
-   port(opcode       : in  std_logic_vector(31 downto 0);
-        intr_signal  : in  std_logic;
-        rs_index     : out std_logic_vector(5 downto 0);
-        rt_index     : out std_logic_vector(5 downto 0);
-        rd_index     : out std_logic_vector(5 downto 0);
-        imm_out      : out std_logic_vector(15 downto 0);
-        alu_func     : out alu_function_type;
-        shift_func   : out shift_function_type;
-        mult_func    : out mult_function_type;
-        branch_func  : out branch_function_type;
-        a_source_out : out a_source_type;
-        b_source_out : out b_source_type;
-        c_source_out : out c_source_type;
-        pc_source_out: out pc_source_type;
-        mem_source_out:out mem_source_type;
-        exception_out: out std_logic);
+   port(clk            : in  std_logic;
+        reset_in       : in  std_logic;
+        opcode         : in  std_logic_vector(31 downto 0);
+        intr_signal    : in  std_logic;
+        rs_index       : out std_logic_vector(5 downto 0);
+        rt_index       : out std_logic_vector(5 downto 0);
+        rd_index       : out std_logic_vector(5 downto 0);
+        imm_out        : out std_logic_vector(15 downto 0);
+        alu_func       : out alu_function_type;
+        shift_func     : out shift_function_type;
+        mult_func      : out mult_function_type;
+        branch_func    : out branch_function_type;
+        a_source_out   : out a_source_type;
+        b_source_out   : out b_source_type;
+        c_source_out   : out c_source_type;
+        pc_source_out  : out pc_source_type;
+        mem_source_out : out mem_source_type;
+        exception_out  : out std_logic);
 end; --entity control
 
 architecture logic of control is
+   signal rs_reg,
+          rt_reg,
+          rd_reg          : std_logic_vector(5 downto 0);
+   signal imm_reg         : std_logic_vector(15 downto 0);
+   signal alu_func_reg    : alu_function_type;
+   signal shift_func_reg  : shift_function_type;
+   signal mult_func_reg   : mult_function_type;
+   signal a_source_reg    : a_source_type;
+   signal b_source_reg    : b_source_type;
+   signal c_source_reg    : c_source_type;
+   signal pc_source_reg   : pc_source_type;
+   signal branch_func_reg : branch_function_type;
+   signal mem_source_reg  : mem_source_type;
 begin
 
-control_proc: process(opcode, intr_signal) 
+control_proc: process(clk, reset_in, rs_reg, rt_reg, rd_reg,
+      imm_reg, alu_func_reg, shift_func_reg, mult_func_reg,
+      a_source_reg, b_source_reg, c_source_reg, pc_source_reg,
+      branch_func_reg, mem_source_reg, opcode, intr_signal) 
    variable op, func       : std_logic_vector(5 downto 0);
-   variable rs, rt, rd     : std_logic_vector(5 downto 0);
    variable rtx            : std_logic_vector(4 downto 0);
    variable imm            : std_logic_vector(15 downto 0);
+   variable rs, rt, rd     : std_logic_vector(5 downto 0);
    variable alu_function   : alu_function_type;
    variable shift_function : shift_function_type;
    variable mult_function  : mult_function_type;
@@ -72,12 +90,12 @@ begin
    branch_function := BRANCH_EQ;
    mem_source := MEM_FETCH;
    op := opcode(31 downto 26);
-   rs := '0' & opcode(25 downto 21);
-   rt := '0' & opcode(20 downto 16);
    rtx := opcode(20 downto 16);
-   rd := '0' & opcode(15 downto 11);
    func := opcode(5 downto 0);
    imm := opcode(15 downto 0);
+   rs := '0' & opcode(25 downto 21);
+   rt := '0' & opcode(20 downto 16);
+   rd := '0' & opcode(15 downto 11);
    is_syscall := '0';
 
    case op is
@@ -265,7 +283,7 @@ begin
       pc_source := FROM_BRANCH;
       branch_function := BRANCH_NE;
 
-   when "000110" =>   --BLEZ   branch=r[rs]<=0;
+   when "000110" =>   --BLEZ   branch=r[rs]:=0;
       a_source := A_FROM_PC;
       b_source := b_FROM_IMMX4;
       alu_function := ALU_ADD;
@@ -344,7 +362,7 @@ begin
    --when "010011" =>   --COP3
    --when "010100" =>   --BEQL   lbranch=r[rs]==r[rt];
    --when "010101" =>   --BNEL   lbranch=r[rs]!=r[rt];
-   --when "010110" =>   --BLEZL  lbranch=r[rs]<=0;
+   --when "010110" =>   --BLEZL  lbranch=r[rs]:=0;
    --when "010111" =>   --BGTZL  lbranch=r[rs]>0;
 
    when "100000" =>   --LB     r[rt]=*(signed char*)ptr;
@@ -462,19 +480,45 @@ begin
       exception_out <= '0';
    end if;
 
-   rs_index <= rs;
-   rt_index <= rt;
-   rd_index <= rd;
-   imm_out <= imm;
-   alu_func <= alu_function;
-   shift_func <= shift_function;
-   mult_func <= mult_function;
-   branch_func <= branch_function;
-   a_source_out <= a_source;
-   b_source_out <= b_source;
-   c_source_out <= c_source;
-   pc_source_out <= pc_source;
-   mem_source_out <= mem_source;
+   if reset_in = '1' then
+      alu_func_reg <= ALU_NOTHING;
+      shift_func_reg <= SHIFT_NOTHING;
+      mult_func_reg <= MULT_NOTHING;
+      branch_func_reg <= BRANCH_EQ;
+      a_source_reg <= A_FROM_REG_SOURCE;
+      b_source_reg <= B_FROM_REG_TARGET;
+      c_source_reg <= C_FROM_NULL;
+      pc_source_reg <= FROM_INC4;
+      mem_source_reg <= MEM_FETCH;
+   elsif rising_edge(clk) then
+      rs_reg <= rs;
+      rt_reg <= rt;
+      rd_reg <= rd;
+      imm_reg <= imm;
+      alu_func_reg <= alu_function;
+      shift_func_reg <= shift_function;
+      mult_func_reg <= mult_function;
+      branch_func_reg <= branch_function;
+      a_source_reg <= a_source;
+      b_source_reg <= b_source;
+      c_source_reg <= c_source;
+      pc_source_reg <= pc_source;
+      mem_source_reg <= mem_source;
+   end if;
+
+   rs_index <= rs_reg;
+   rt_index <= rt_reg;
+   rd_index <= rd_reg;
+   imm_out <= imm_reg;
+   alu_func <= alu_func_reg;
+   shift_func <= shift_func_reg;
+   mult_func <= mult_func_reg;
+   branch_func <= branch_func_reg;
+   a_source_out <= a_source_reg;
+   b_source_out <= b_source_reg;
+   c_source_out <= c_source_reg;
+   pc_source_out <= pc_source_reg;
+   mem_source_out <= mem_source_reg;
 
 end process;
 

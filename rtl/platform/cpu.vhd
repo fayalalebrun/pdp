@@ -217,7 +217,7 @@ architecture Behavioral of cpu is
     -- cpu signals
     constant cpu_width             : integer := 32;
     constant cpu_memory_type       : string  := "TRI_PORT_X";
-    constant cpu_pipeline_stages   : natural := 3;
+    constant cpu_pipeline_stages   : natural := 4;
     signal cpu_write_data          : std_logic_vector(cpu_width-1 downto 0);
     signal cpu_read_data           : std_logic_vector(cpu_width-1 downto 0);
     signal cpu_address_next        : std_logic_vector(cpu_width-1 downto 0);
