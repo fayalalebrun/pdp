@@ -284,34 +284,46 @@ begin
 --                         bb_reg_def <= '0' & bb_reg_def(31 downto 1);
 --                      end if;
     		   		   -- NEW: Radix-4 MULTIPLICATION
-                     if count_reg = "010010" then
-                        a_triple <= bv_adder(a_double, aa_reg_r4(31) & aa_reg_r4, mode_reg);
-                     elsif count_reg <= "010001" then
-                         if count_reg < "010001" then
-                            lower_reg <= sum_radix_4(1 downto 0) & lower_reg(31 downto 2);
-                            upper_reg <= sum_radix_4(33 downto 2);
-                         end if;
-                         
-                         if bb_old = "00" then
-                           upper_reg_r4 <= sign2_reg & sign2_reg & sum_radix_4(33 downto 2);
-                         else
-                           upper_reg_r4 <= (sign_reg xor sum_radix_4(34)) & (sign_reg xor sum_radix_4(34)) & sum_radix_4(33 downto 2);
+    		   		  -- Calculating 3xa once
+                      if count_reg = "010010" then
+                         a_triple <= bv_adder(a_double, aa_reg_r4(31) & aa_reg_r4, mode_reg);
+                      end if;
+                      -- Starting the multiplication after 3xa is caluclated
+                      if count_reg <= "010001" then
+                         -- Register used as output c_mult
+                         -- THIS MAY BE THE CAUSE OF THE PROBLEM !!!
+--                         lower_reg <= sum_radix_4(1 downto 0) & lower_reg(31 downto 2);
+--                         upper_reg <= sum_radix_4(33 downto 2);
+                        
+                        -- Shifting the upper register and sign extending it
+                        if bb_old = "00" then
+                            upper_reg_r4 <= sign2_reg & sign2_reg & sum_radix_4(33 downto 2);
+                        else
+                            upper_reg_r4 <= (sign_reg xor sum_radix_4(34)) & (sign_reg xor sum_radix_4(34)) & sum_radix_4(33 downto 2);
                             sign2_reg <= sign2_reg or sign_reg;
                             sign_reg <= '0';
-                         end if; 
-                         
-                         if bb_reg(1 downto 0) = "00" then 
-                            a_select <= "00";
-                         elsif bb_reg(1 downto 0) = "01" then
-                            a_select <= "01";
-                         elsif bb_reg(1 downto 0) = "10" then
-                            a_select <= "10";
-                         else 
-                            a_select <= "11";
-                         end if;
-                         bb_old <= bb_reg(1 downto 0);
-                         bb_reg <= "00" & bb_reg(31 downto 2);
+                        end if; 
                      end if;
+                     -- Last cycle doesn't require shifting and selection of bb_old
+                     if count_reg > "000001" then
+                        if bb_reg(1 downto 0) = "00" then 
+                            a_select <= "00";
+                        elsif bb_reg(1 downto 0) = "01" then
+                            a_select <= "01";
+                        elsif bb_reg(1 downto 0) = "10" then
+                            a_select <= "10";
+                        else 
+                            a_select <= "11";
+                        end if;
+                     
+                        bb_reg <= "00" & bb_reg(31 downto 2);
+                        bb_old <= bb_reg(1 downto 0);
+                        lower_reg <= sum_radix_4(1 downto 0) & lower_reg(31 downto 2);
+                       -- The last cycle is when the upper_reg is saved to
+                       else
+                            upper_reg <= upper_reg_r4(31 downto 0);
+                            a_select <= "00";                    
+                       end if;
                   else   
                      -- Division
                      if sum(32) = '0' and aa_reg /= ZERO and 
