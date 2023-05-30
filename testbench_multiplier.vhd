@@ -73,28 +73,28 @@ begin
              (others => '0') after 280 ns,
              std_logic_vector(to_signed(-5, 32)) after 1000 ns, -- -5
              (others => '0') after 1180 ns,
-             std_logic_vector(to_signed(5, 32)) after 1900ns, -- 5
-             (others => '0') after 2080 ns,
-             std_logic_vector(to_signed(-5, 32)) after 2800ns, -- -5
-             (others => '0') after 2980 ns,
-             std_logic_vector(to_unsigned(69, 32)) after 3700ns,
-             (others => '0') after 3880 ns,
-             std_logic_vector(to_signed(-120, 32)) after 4600ns,
-             (others => '0') after 4780 ns;
+             std_logic_vector(to_signed(5, 32)) after 2000 ns, -- 5
+             (others => '0') after 2180 ns,
+             std_logic_vector(to_signed(-5, 32)) after 3000 ns, -- -5
+             (others => '0') after 3180 ns,
+             std_logic_vector(to_unsigned(69, 32)) after 4000 ns,
+             (others => '0') after 4180 ns,
+             std_logic_vector(to_signed(-120, 32)) after 5000 ns,
+             (others => '0') after 5180 ns;
              
     b_sig <= (others => '0') after 0 ns,
              std_logic_vector(to_signed(-2147483648, 32)) after 100 ns, -- 13
              (others => '0') after 280 ns,
              std_logic_vector(to_signed(13, 32)) after 1000 ns, -- 13
              (others => '0') after 1180 ns,
-             std_logic_vector(to_signed(-13, 32)) after 1900 ns, -- -13
-             (others => '0') after 2080 ns,
-             std_logic_vector(to_signed(-13, 32)) after 2800ns, -- -13
-             (others => '0') after 2980 ns,
-             std_logic_vector(to_unsigned(13, 32)) after 3700ns,
-             (others => '0') after 3880 ns,
-             std_logic_vector(to_unsigned(2147483647, 32)) after 4600ns,
-             (others => '0') after 4780 ns;
+             std_logic_vector(to_signed(-13, 32)) after 2000 ns, -- -13
+             (others => '0') after 2180 ns,
+             std_logic_vector(to_signed(-13, 32)) after 3000 ns, -- -13
+             (others => '0') after 3180 ns,
+             std_logic_vector(to_unsigned(13, 32)) after 4000ns,
+             (others => '0') after 4180 ns,
+             std_logic_vector(to_unsigned(2147483647, 32)) after 5000ns,
+             (others => '0') after 5180 ns;
              
              
     
@@ -105,23 +105,23 @@ begin
                      MULT_SIGNED_MULT after 1040 ns, -- second
                      MULT_NOTHING after 1160 ns,
                      MULT_READ_LO after 1180 ns,
-                     MULT_NOTHING after 1800 ns,
-                     MULT_SIGNED_MULT after 1940 ns, -- third
-                     MULT_NOTHING after 2060 ns,
-                     MULT_READ_LO after 2080 ns,
-                     MULT_NOTHING after 2700 ns,
-                     MULT_SIGNED_MULT after 2840 ns, -- forth
-                     MULT_NOTHING after 2960 ns,
-                     MULT_READ_LO after 2980 ns,
-                     MULT_NOTHING after 3600 ns,
-                     MULT_MULT after 3740 ns, -- FIFTH
-                     MULT_NOTHING after 3860 ns,
-                     MULT_READ_LO after 3880 ns,
-                     MULT_NOTHING after 4500 ns,
-                     MULT_SIGNED_MULT after 4640 ns, -- SIXTH
-                     MULT_NOTHING after 4760 ns,
-                     MULT_READ_HI after 4780 ns,
-                     MULT_NOTHING after 5400 ns
+                     MULT_NOTHING after 1900 ns,
+                     MULT_SIGNED_MULT after 2040 ns, -- third
+                     MULT_NOTHING after 2160 ns,
+                     MULT_READ_LO after 2180 ns,
+                     MULT_NOTHING after 2900 ns,
+                     MULT_SIGNED_MULT after 3040 ns, -- forth
+                     MULT_NOTHING after 3160 ns,
+                     MULT_READ_LO after 3180 ns,
+                     MULT_NOTHING after 3900 ns,
+                     MULT_MULT after 4040 ns, -- FIFTH
+                     MULT_NOTHING after 4160 ns,
+                     MULT_READ_LO after 4180 ns,
+                     MULT_NOTHING after 4900 ns,
+                     MULT_SIGNED_MULT after 5040 ns, -- SIXTH
+                     MULT_NOTHING after 5160 ns,
+                     MULT_READ_HI after 5180 ns,
+                     MULT_NOTHING after 5900 ns
                      ;
 
     
