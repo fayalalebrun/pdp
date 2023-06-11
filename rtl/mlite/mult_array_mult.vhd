@@ -68,6 +68,8 @@ component flipflop is
 end component;
 
 signal ff_input_sum, ff_input_carry: std_logic_vector(30 downto 0) := (others => '0');
+signal ff_out_res_lower: std_logic_vector(30 downto 0) := (others => '0');
+signal ff_signed, temp: std_logic;
 
 signal a_input, b_input: std_logic_vector(31 downto 0);
 signal results: std_logic_vector(64 downto 0);
@@ -90,6 +92,7 @@ signal bw1, bw2 : std_logic;
 type fa_state is (idle, busy, waiting);
 signal fsm_state: fa_state;
 signal counter: std_logic_vector(1 downto 0) := "00";
+
 begin
 
 AB_gen_row: for i in 0 to 30 generate
@@ -120,8 +123,16 @@ mux_gen: for i in 0 to 30 generate
  end generate;
 
 -- Final missing (a AND b) term
-a_and_b(31, 31) <= a_input(31) and b_input(31);
-
+--a_and_b(31, 31) <= a_input(31) and b_input(31);
+temp <= a_input(31) and b_input(31);
+ff_ab_last: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => temp,
+        Q => a_and_b(31, 31)
+    );
+    
+    
 FA_first_row: for i in 1 to 31 generate
     FULL_ADDER_t: fulladder port map (
         a => a_and_b(i, 0),
@@ -200,17 +211,23 @@ ff1_carry: flipflop port map (
 
 
 -- bottom most right FA, i.e., start of ripple carry portion
+ff_s: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => sel_signed,
+        Q => ff_signed
+    );
 F1: fulladder port map(
     a => carry_array(30, 0),
     b => sum_array(30, 1),
-    cin => sel_signed,
+    cin => ff_signed,
     s => sum_array(31, 0),
     cout => carry_array(31, 0)
 );
 
 -- bottom most left EXTRA FA for signed/unsigned addition
 F2: fulladder port map(
-    a => sel_signed,
+    a => ff_signed,
     b => '0',
     cin => carry_array(31, 30),
     s => results(63),
@@ -235,11 +252,32 @@ FA_LL: fulladder port map(
     cout => carry_array(31, 30)
 );
 
--- TODO: Add Code to assign the sums to 'results' vector 
-    results(0) <= a_and_b(0, 0);
-sum_assign: for index in 1 to 32 generate
+-- Add Code to assign the sums to 'results' vector 
+ff1_res: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => a_and_b(0, 0),
+        Q => ff_out_res_lower(0)
+    );
+    results(0) <= ff_out_res_lower(0);
+sum_assign: for index in 1 to 30 generate
+    ff1_res: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => sum_array(index - 1, 0),
+        Q => ff_out_res_lower(index)
+    );    
+    results(index) <= ff_out_res_lower(index);
+end generate;
+sum_assign2: for index in 31 to 32 generate
     results(index) <= sum_array(index - 1, 0);
 end generate;
+--    results(32) <= sum_array(31, 0);
+
+--    results(0) <= a_and_b(0, 0);
+--sum_assign: for index in 1 to 32 generate
+--    results(index) <= sum_array(index - 1, 0);
+--end generate;
 
 
 c_res <= results(63 downto 0);
@@ -266,9 +304,9 @@ begin
                     fsm_state <= fsm_state;
                  end if;
             when busy =>
+                a_input <= a_input;
+                b_input <= b_input;
                 if counter /= "00" then
-                    a_input <= a_input;
-                    b_input <= b_input;
                     fsm_state <= fsm_state;
                     counter <= counter - count;
                 elsif enable = '0' then
