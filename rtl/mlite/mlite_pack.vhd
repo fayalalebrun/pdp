@@ -296,6 +296,7 @@ package mlite_pack is
       generic(alu_type  : string := "DEFAULT");
       port(a_in         : in  std_logic_vector(31 downto 0);
            b_in         : in  std_logic_vector(31 downto 0);
+           sum          : in  std_logic_vector(32 downto 0);
            alu_function : in  alu_function_type;
            c_alu        : out std_logic_vector(31 downto 0));
    end component;
@@ -316,6 +317,23 @@ package mlite_pack is
            mult_func : in  mult_function_type;
            c_mult    : out std_logic_vector(31 downto 0);
            pause_out : out std_logic); 
+   end component;
+
+   component adder
+       port(a_in     : in std_logic_vector(31 downto 0);
+            b_in     : in std_logic_vector(31 downto 0);
+            alu_func : in alu_function_type;
+            sum      : out std_logic_vector(32 downto 0));
+   end component; 
+
+   component cla4
+       port(a    : in std_logic_vector(3 downto 0);
+            b    : in std_logic_vector(3 downto 0);
+            cin  : in std_logic;
+            g    : inout std_logic_vector(3 downto 0);
+            p    : inout std_logic_vector(3 downto 0);
+            cout : out std_logic;
+            sum  : out std_logic_vector(3 downto 0));
    end component;
 
    component pipeline
