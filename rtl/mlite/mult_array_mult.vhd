@@ -71,7 +71,7 @@ signal ff_input_sum, ff_input_carry: std_logic_vector(30 downto 0) := (others =>
 signal ff_out_res_lower: std_logic_vector(30 downto 0) := (others => '0');
 signal ff_signed, temp: std_logic;
 
-signal a_input, b_input: std_logic_vector(31 downto 0);
+signal a_input, b_input: std_logic_vector(31 downto 0) := (others => '0');
 signal results: std_logic_vector(64 downto 0);
 
 -- NOTE: sum/carry array are in shape 31, 30), so (31, 31) is unused in them
@@ -282,13 +282,17 @@ end generate;
 
 c_res <= results(63 downto 0);
 
+a_input <= a when enable ='1' else
+           a_input;
+b_input <= b when enable = '1' else
+           b_input;
 mult_process: process(clk, enable, a, b, sel_signed)
       variable count : std_logic_vector(1 downto 0);
 begin
     if reset = '1' then
 --        results <= (others => '0');
-        a_input <= (others => '0');
-        b_input <= (others => '0');
+--        a_input <= (others => '0');
+--        b_input <= (others => '0');
         fsm_state <= idle;
     elsif rising_edge(clk) then    
         count := "01";
@@ -296,21 +300,25 @@ begin
         case fsm_state is
             when idle => 
                 if enable = '1' then
-                    a_input <= a;
-                    b_input <= b;
+--                    a_input <= a;
+--                    b_input <= b;
                     counter <= "01";
                     fsm_state <= busy;
                  else
+--                    a_input <= a_input;
+--                    b_input <= b_input;
+                    counter <= counter;
                     fsm_state <= fsm_state;
                  end if;
             when busy =>
-                a_input <= a_input;
-                b_input <= b_input;
+--                a_input <= a_input;
+--                b_input <= b_input;
                 if counter /= "00" then
                     fsm_state <= fsm_state;
                     counter <= counter - count;
                 elsif enable = '0' then
                     fsm_state <= idle;
+                    counter <= counter;
                 end if;              
             when waiting =>
                 if enable = '0' then

@@ -371,8 +371,8 @@ begin
                          end if;
                       elsif mult_type = "FULL_ARRAY" then
                           upper_reg <= upper_fa_res;
-                         lower_reg <= lower_fa_res;
-                          if count_reg = "000010" then
+                          lower_reg <= lower_fa_res;
+                          if count_reg = "000001" then
                              enable_array_mult <= '0';
 --                             upper_reg <= upper_reg;
 --                             lower_reg <= lower_reg;
