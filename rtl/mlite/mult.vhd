@@ -127,8 +127,8 @@ begin
         clk => clk,
         reset => reset_in,
         enable => enable_array_mult,
-        a => a_copy,
-        b => b_copy,
+        a => aa_reg,
+        b => bb_reg,
         sel_signed => sign_or_unsigned,
         c_res => fa_res);
  
@@ -215,7 +215,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000011";
+                   count_reg <= "000010";
                end if;   
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
@@ -261,7 +261,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000011";
+                   count_reg <= "000010";
                end if;               
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
