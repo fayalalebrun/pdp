@@ -38,12 +38,11 @@
 ---------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
-use ieee.std_logic_unsigned.all;
-use IEEE.std_logic_arith.all;
+use ieee.numeric_std.all;
 use work.mlite_pack.all;
 
 entity mult is
-   generic(mult_type  : string := "DEFAULT");
+   generic(mult_type  : string := "FULL_ARRAY");
    port(clk       : in std_logic;
         reset_in  : in std_logic;
         a, b      : in std_logic_vector(31 downto 0);
@@ -391,7 +390,7 @@ begin
                      lower_reg(31 downto 1) <= lower_reg(30 downto 0);
                      bb_reg <= '0' & bb_reg(31 downto 1);
                   end if;
-                  count_reg <= count_reg - count;
+                  count_reg <= std_logic_vector(unsigned(count_reg) - unsigned(count));
                end if; --count
 
          end case;
