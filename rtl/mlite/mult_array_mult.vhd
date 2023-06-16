@@ -67,9 +67,11 @@ component flipflop is
            Q : out STD_LOGIC);
 end component;
 
-signal ff_input_sum, ff_input_carry: std_logic_vector(30 downto 0) := (others => '0');
+type ff_pipeline is array (0 to 1) of std_logic_vector(30 downto 0);
+signal ff_input_sum, ff_input_carry: ff_pipeline := (others => (others => '0'));
+--signal ff_input_sum, ff_input_carry: std_logic_vector(30 downto 0) := (others => '0');
 signal ff_out_res_lower: std_logic_vector(30 downto 0) := (others => '0');
-signal ff_signed, temp: std_logic;
+signal ff_signed, temp, temp2: std_logic;
 
 signal a_input, b_input: std_logic_vector(31 downto 0) := (others => '0');
 signal results: std_logic_vector(64 downto 0);
@@ -89,12 +91,22 @@ signal baugh_wooley_col, baugh_wooley_row: std_logic_vector(30 downto 0);
 
 signal bw1, bw2 : std_logic;
 
+-- For Debugging. Does not affect functionallity
 type fa_state is (idle, busy, waiting);
 signal fsm_state: fa_state;
 signal counter: std_logic_vector(1 downto 0) := "00";
 
 begin
-
+-- 1st: ASSIGN ALL (a and b) terms with flipflops and muxes when necessary
+-- Final missing (a AND b) term
+temp <= a_input(31) and b_input(31);
+ff_ab_last: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => temp,
+        Q => a_and_b(31, 31)
+    );
+    
 AB_gen_row: for i in 0 to 30 generate
      AB_gen_col: for j in 0 to 30 generate  
         a_and_b(i, j) <= a_input(i) and b_input(j);
@@ -108,7 +120,7 @@ baugh_w: for index in 0 to 30 generate
 end generate;  
 
 -- Generating 2 x 30 (inverter) mux's for signed operation
--- for the 31st row and 31 column
+-- for the 31st row and 30th column
 mux_gen: for i in 0 to 30 generate
         m1: mux2x1 port map(
             a => baugh_wooley_row(i),
@@ -122,19 +134,10 @@ mux_gen: for i in 0 to 30 generate
             );     
  end generate;
 
--- Final missing (a AND b) term
---a_and_b(31, 31) <= a_input(31) and b_input(31);
-temp <= a_input(31) and b_input(31);
-ff_ab_last: flipflop port map (
-        clk => clk,
-        reset => reset,
-        D => temp,
-        Q => a_and_b(31, 31)
-    );
-    
+-- 2nd: Generate the Full Adders with correct connections to signals
     
 FA_first_row: for i in 1 to 31 generate
-    FULL_ADDER_t: fulladder port map (
+    FULL_ADDERS_TOP: fulladder port map (
         a => a_and_b(i, 0),
         b => a_and_b(i - 1, 1),
         cin => '0',
@@ -144,9 +147,9 @@ FA_first_row: for i in 1 to 31 generate
 end generate;
 
 --FA_middle_rows: for i in 1 to 30 generate   -- rows
-FA_middle_rows: for i in 1 to 29 generate   -- rows
-    FA_middle_cols: for j in 0 to 29 generate               -- columns
-        FULL_ADDER_m: fulladder port map(
+FA_middle_rows_a: for i in 1 to 14 generate   -- rows
+    FA_middle_cols_a: for j in 0 to 29 generate               -- columns
+        FULL_ADDERS_MID_a: fulladder port map(
             a => carry_array(i-1, j),
             b => sum_array(i-1, j+1),
             cin => a_and_b(j, i + 1),
@@ -156,31 +159,61 @@ FA_middle_rows: for i in 1 to 29 generate   -- rows
     end generate;
 end generate;
 
+FA_middle_rows_b: for i in 16 to 29 generate   -- rows
+    FA_middle_cols_b: for j in 0 to 29 generate               -- columns
+        FULL_ADDERS_MID_b: fulladder port map(
+            a => carry_array(i-1, j),
+            b => sum_array(i-1, j+1),
+            cin => a_and_b(j, i + 1),
+            s => sum_array(i, j),
+            cout => carry_array(i, j)
+        );
+    end generate;
+end generate;
 FA_row_with_ff: for j in 0 to 29 generate
-    FULL_ADDER_m2: fulladder port map(
+    FULL_ADDER_MID_BUF_1: fulladder port map(
+            a => carry_array(14, j),
+            b => sum_array(14, j+1),
+            cin => a_and_b(j, 16),
+            s => ff_input_sum(0)(j),
+            cout => ff_input_carry(0)(j)
+        );
+    ff_sum_1: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => ff_input_sum(0)(j),
+        Q => sum_array(15, j)
+    );
+    ff_carry_1: flipflop port map (
+        clk => clk,
+        reset => reset,
+        D => ff_input_carry(0)(j),
+        Q => carry_array(15, j)
+    );
+    FULL_ADDER_MID_BUF_2: fulladder port map(
             a => carry_array(29, j),
             b => sum_array(29, j+1),
             cin => a_and_b(j, 31),
-            s => ff_input_sum(j),
-            cout => ff_input_carry(j)
+            s => ff_input_sum(1)(j),
+            cout => ff_input_carry(1)(j)
         );
-    ff_sum: flipflop port map (
+    ff_sum_2: flipflop port map (
         clk => clk,
         reset => reset,
-        D => ff_input_sum(j),
+        D => ff_input_sum(1)(j),
         Q => sum_array(30, j)
     );
-    ff_carry: flipflop port map (
+    ff_carry_2: flipflop port map (
         clk => clk,
         reset => reset,
-        D => ff_input_carry(j),
+        D => ff_input_carry(1)(j),
         Q => carry_array(30, j)
     );
 end generate;
 
 --FA_last_col: for i in 1 to 30 generate
-FA_last_col: for i in 1 to 29 generate
-    FULL_ADDER_L: fulladder port map (
+FA_last_col_a: for i in 1 to 14 generate
+    FULL_ADDER_LEFT_a: fulladder port map (
         a => a_and_b(31, i),
         b => a_and_b(30, i + 1),
         cin => carry_array(i-1, 30),
@@ -188,29 +221,58 @@ FA_last_col: for i in 1 to 29 generate
         cout => carry_array(i, 30)
     );
 end generate;
+ff_sum_1_2: flipflop port map (
+    clk => clk,
+    reset => reset,
+    D => ff_input_sum(0)(30),
+    Q => sum_array(15, 30)
+);
+ff_carry_1_2: flipflop port map (
+    clk => clk,
+    reset => reset,
+    D => ff_input_carry(0)(30),
+    Q => carry_array(15, 30)
+);
 
+FULL_ADDER_LEFT_ff: fulladder port map (
+        a => a_and_b(31, 15),
+        b => a_and_b(30, 16),
+        cin => carry_array(14, 30),
+        s => ff_input_sum(0)(30),
+        cout => ff_input_carry(0)(30)
+    );
+FA_last_col_b: for i in 16 to 29 generate
+    FULL_ADDER_LEFT_b: fulladder port map (
+        a => a_and_b(31, i),
+        b => a_and_b(30, i + 1),
+        cin => carry_array(i-1, 30),
+        s => sum_array(i, 30),
+        cout => carry_array(i, 30)
+    );
+end generate;
+---------------------
 F3: fulladder port map(
     a => a_and_b(31, 30),
     b => a_and_b(30, 31),
     cin => carry_array(29, 30),
-    s => ff_input_sum(30),
-    cout => ff_input_carry(30)
+    s => ff_input_sum(1)(30),
+    cout => ff_input_carry(1)(30)
 );
 ff1_sum: flipflop port map (
         clk => clk,
         reset => reset,
-        D => ff_input_sum(30),
+        D => ff_input_sum(1)(30),
         Q => sum_array(30, 30)
     );
 ff1_carry: flipflop port map (
         clk => clk,
         reset => reset,
-        D => ff_input_carry(30),
+        D => ff_input_carry(1)(30),
         Q => carry_array(30, 30)
     );
 
 
--- bottom most right FA, i.e., start of ripple carry portion
+-- bottom most right FA, i.e., start of ripple carry portion ------------------
 ff_s: flipflop port map (
         clk => clk,
         reset => reset,
@@ -224,17 +286,28 @@ F1: fulladder port map(
     s => sum_array(31, 0),
     cout => carry_array(31, 0)
 );
+-- ----------------------------------------------------------------------------
 
--- bottom most left EXTRA FA for signed/unsigned addition
-F2: fulladder port map(
+-- bottom most left EXTRA FA for signed/unsigned addition ---------------------
+FA_LL2: fulladder port map(
     a => ff_signed,
     b => '0',
     cin => carry_array(31, 30),
     s => results(63),
     cout => results(64)
 );
+-- ----------------------------------------------------------------------------
 
-FA_last_row: for j in 1 to 29 generate
+FA_LL1: fulladder port map(
+    a => carry_array(30, 30),
+    b => a_and_b(31, 31),
+    cin => carry_array(31, 29),
+    s => results(62),
+    cout => carry_array(31, 30)
+);
+
+-- Last row of Full Adders with Carry-Ripple
+FA_last_row_a: for j in 1 to 29 generate
     FULL_ADDER_b: fulladder port map(
         a => carry_array(30, j),
         b => sum_array(30, j+1),
@@ -243,15 +316,31 @@ FA_last_row: for j in 1 to 29 generate
         cout => carry_array(31, j)
     );
 end generate;
+---- extra flip flop for reducing critical path
+--ff_temp: flipflop port map (
+--        clk => clk,
+--        reset => reset,
+--        D => carry_array(31, 14),
+--        Q => temp2
+--    );
+--FULL_ADDER_b: fulladder port map(
+--    a => carry_array(30, 15),
+--    b => sum_array(30, 16),
+--    cin => temp2,
+--    s => results(47),
+--    cout => carry_array(31, 15)
+--);
+--FA_last_row_b: for j in 16 to 29 generate
+--    FULL_ADDER_b: fulladder port map(
+--        a => carry_array(30, j),
+--        b => sum_array(30, j+1),
+--        cin => carry_array(31, j-1),
+--        s => results(j + 32),
+--        cout => carry_array(31, j)
+--    );
+--end generate;
 
-FA_LL: fulladder port map(
-    a => carry_array(30, 30),
-    b => a_and_b(31, 31),
-    cin => carry_array(31, 29),
-    s => results(62),
-    cout => carry_array(31, 30)
-);
-
+-- 3rd: ASSIGN THE SUM ARRAY TO THE RESULTS VECTOR
 -- Add Code to assign the sums to 'results' vector 
 ff1_res: flipflop port map (
         clk => clk,
