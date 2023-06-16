@@ -212,6 +212,12 @@ begin
           block_wr_addr <= (others=>'0');
        end if;
 
+       if cacheable_range then
+          mem_wr_data <= block_rd_data;
+       else
+          mem_wr_data <= cpu_wr_data;
+       end if;
+
        case cpu_rd_source is
           when CACHE =>
              cpu_rd_data <= block_rd_data;
@@ -244,11 +250,7 @@ begin
                     if (mem_wr_handshake) then
                         axi_finished_write <= True;
                     end if;
-                    if mem_wr_handshake and mem_access_exwrite_block and memory_wr_count/=2**word_bits_per_line-1 then
-                        mem_wr_data <= block_rd_data;
-                        -- Get ready for the next one
-                        -- block_rd_addr set combinatorially
-                    end if;
+
                     if mem_rd_handshake and mem_access_mode=READ_WORD then
                        cpu_rd_source <= MEM;
                     end if;                   
@@ -285,7 +287,7 @@ begin
                     end if;
                     if ((mem_access_exwrite_block or mem_access_exread_block) and mem_wr_en_buff='0' and mem_rd_en_buff='0') or (mem_access_word and (mem_wr_handshake or mem_rd_handshake)) then
                         mem_access_needed <= False;
-                        cpu_pause_var    := '1';
+                        cpu_pause_var    := '0';
                     end if;
                 ------------------------------------------
                 -- Address is not in the cacheable range
@@ -298,7 +300,6 @@ begin
                         mem_access_mode <= WRITE_WORD;
                         mem_wr_addr     <= cpu_next_address;
                         mem_wr_byte_en  <= cpu_wr_byte_en;
-                        mem_wr_data     <= cpu_wr_data;
                         memory_wr_count <= 0;
                         mem_wr_en_buff  <= '1';
                     else
@@ -341,7 +342,6 @@ begin
                             memory_wr_count    <= 0;
                             mem_wr_byte_en     <= (others=>'1');
                             mem_wr_en_buff     <= '1';
-                            mem_wr_data        <= block_rd_data;
                             axi_finished_write <= False;
                         else
                             valid_rows(mem_index)(mem_way) <= '1';
