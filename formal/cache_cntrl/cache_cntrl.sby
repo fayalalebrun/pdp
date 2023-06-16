@@ -5,18 +5,17 @@ prove
 [options]
 cover: mode cover
 prove: mode prove
-cover: depth 20
+cover: depth 50
 prove: depth 20
 
 [engines]
 smtbmc
 
 [script]
-ghdl -fsynopsys --std=08 -frelaxed cpu_pack.vhd bytewrite_sdp_ram_wf.vhd cache_cntrl.vhd cache_cntrl.psl -e cache_cntrl
+ghdl -fsynopsys --std=08 -frelaxed cpu_pack.vhd cache_cntrl.vhd cache_cntrl.psl -e cache_cntrl
 prep -top cache_cntrl
 
 [files]
 cache_cntrl.psl
 ../../rtl/platform/cpu_pack.vhd
-../../rtl/platform/bytewrite_sdp_ram_wf.vhd
 ../../rtl/platform/cache_cntrl.vhd

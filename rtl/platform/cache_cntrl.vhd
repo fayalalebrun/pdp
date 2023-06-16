@@ -85,6 +85,11 @@ architecture Behavioral of cache_cntrl is
     type cpu_rd_source_type is (MEM, CACHE);
     signal cpu_rd_source: cpu_rd_source_type;
 
+    type ram_type is array (0 to block_ram_depth - 1) of std_logic_vector(4 * 8 - 1 downto 0);
+    shared variable block_ram : ram_type := (others => (others => '0'));
+    attribute ram_style: string;
+    attribute ram_style of block_ram : variable is "block";
+
     impure function CacheAddr(
        index: integer;
        way: integer;
@@ -136,22 +141,6 @@ architecture Behavioral of cache_cntrl is
        return address(cpu_addr_width-1 downto cpu_addr_width-4) = "0001" and or_reduce(address(cpu_addr_width-5 downto cache_address_width))='0';
     end function;
 begin
-
-   block_mem: entity work.bytewrite_sdp_ram_wf(byte_wr_ram_wf)
-      generic map (
-         NB_COL => 4,
-         COL_WIDTH => 8,
-         SIZE => block_ram_depth
-         )
-      port map(
-         addra => block_wr_addr,
-         addrb => block_rd_addr,
-         dia => block_wr_data,
-         clka => aclk,
-         wea => block_we,
-         dob => block_rd_data,
-         enb => '1'
-         );
    
     cpu_pause       <= cpu_pause_buff;
     cpu_tag         <= Tag(cpu_next_address);
@@ -393,6 +382,27 @@ begin
 
     end process;
 
+    ------- Write port -------
+    process(aclk)
+    begin
+       if rising_edge(aclk) then
 
+          for i in 0 to 4 - 1 loop
+             if block_we(i) = '1' then
+                block_ram(conv_integer(block_wr_addr))((i + 1) * 8 - 1 downto i * 8) := block_wr_data((i + 1) * 8 - 1 downto i * 8);
+             end if;
+          end loop;
+
+       end if;
+
+    end process;
+
+    ------- Read port -------
+    process(aclk)
+    begin
+       if rising_edge(aclk) then
+          block_rd_data <= block_ram(conv_integer(block_rd_addr));
+       end if;
+    end process;
     
 end Behavioral;

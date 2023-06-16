@@ -1,7 +1,6 @@
 
 DUT  = cache_cntrl
 SRC += ../../rtl/platform/cpu_pack.vhd
-SRC += ../../rtl/platform/bytewrite_sdp_ram_wf.vhd
 SRC += ../../rtl/platform/cache_cntrl.vhd
 
 
