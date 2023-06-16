@@ -15,7 +15,7 @@ entity cache_cntrl is
         -- cache params       
         cache_way_width      : integer := 1;            -- # blocks per cache line; associativity = 2^cache_way_width
         cache_index_width    : integer := 4;            -- # of cache lines = 2^cache_index_width
-        cache_offset_width   : integer := 5;            -- # of bytes per block = 2^cache_offset_width
+        cache_offset_width   : integer := 3;            -- # of bytes per block = 2^cache_offset_width
         cache_address_width  : integer := 16;           -- address width for cacheable range
         cache_replace_policy : string := "RR"           -- replacement policy when cache miss: "RR"
     );               
@@ -44,13 +44,17 @@ end cache_cntrl;
 
 architecture Behavioral of cache_cntrl is
     constant tag_width           : integer := cache_address_width-cache_index_width-cache_offset_width;
-    constant block_word_width    : integer := cache_offset_width-clogb2(cpu_data_width/8);   
-    constant lfsr_width          : integer := 16;   
-    type block_rows_type         is array(0 to 2**cache_index_width-1) of std_logic_vector(2**cache_way_width*2**cache_offset_width*8-1 downto 0);
+    constant word_bits_per_line    : integer := cache_offset_width-clogb2(cpu_data_width/8);   
+    constant lfsr_width          : integer := 16;
+    constant block_ram_depth     : integer := 2**cache_index_width*2**cache_way_width*2**word_bits_per_line;
     type tag_rows_type           is array(0 to 2**cache_index_width-1) of std_logic_vector(2**cache_way_width*tag_width-1 downto 0);
     type valid_rows_type         is array(0 to 2**cache_index_width-1) of std_logic_vector(2**cache_way_width-1 downto 0);
     type memory_access_mode_type is (READ_BLOCK,WRITE_BLOCK,EXCHANGE_BLOCK,WRITE_WORD,READ_WORD);
-    signal block_rows            : block_rows_type := (others=>(others=>'0'));
+    signal block_rd_addr            : std_logic_vector((clogb2(block_ram_depth)-1) downto 0);
+    signal block_wr_addr            : std_logic_vector((clogb2(block_ram_depth)-1) downto 0);
+    signal block_rd_data         : std_logic_vector(cpu_data_width-1 downto 0);
+    signal block_wr_data         : std_logic_vector(cpu_data_width-1 downto 0);
+    signal block_we              : std_logic_vector(cpu_data_width/8-1 downto 0);
     signal tag_rows              : tag_rows_type := (others=>(others=>'0'));
     signal valid_rows            : valid_rows_type := (others=>(others=>'0'));
     signal cpu_tag               : std_logic_vector(tag_width-1 downto 0) := (others=>'0');
@@ -68,8 +72,8 @@ architecture Behavioral of cache_cntrl is
     signal mem_way               : integer range 0 to 2**cache_way_width-1 := 0;
     signal mem_access_needed     : Boolean := False;
     signal mem_access_mode       : memory_access_mode_type := READ_BLOCK;
-    signal memory_wr_count       : integer range 0 to 2**block_word_width-1 := 0;
-    signal memory_rd_count       : integer range 0 to 2**block_word_width-1 := 0;
+    signal memory_wr_count       : integer range 0 to 2**word_bits_per_line-1 := 0;
+    signal memory_rd_count       : integer range 0 to 2**word_bits_per_line-1 := 0;
     signal mem_wr_en_buff        : std_logic := '0';
     signal mem_rd_en_buff        : std_logic := '0';
     signal mem_wr_valid_buff     : std_logic := '0';
@@ -77,8 +81,36 @@ architecture Behavioral of cache_cntrl is
     signal mem_index             : integer range 0 to 2**cache_index_width-1 := 0;
     signal lfsr                  : std_logic_vector(lfsr_width-1 downto 0) := X"ace1";
     signal axi_finished_read     : Boolean := False;
-    signal axi_finished_write    : Boolean := False;  
+    signal axi_finished_write    : Boolean := False;
+    type cpu_rd_source_type is (MEM, CACHE);
+    signal cpu_rd_source: cpu_rd_source_type;
+
+    impure function CacheAddr(
+       index: integer;
+       way: integer;
+       offset: integer) return std_logic_vector is
+    begin
+       return std_logic_vector(to_unsigned(index*2**word_bits_per_line + way * 2**cache_index_width * 2**word_bits_per_line + offset, block_rd_addr'length));
+    end function;
+
 begin
+
+   block_mem: entity work.bytewrite_sdp_ram_wf(byte_wr_ram_wf)
+      generic map (
+         NB_COL => 4,
+         COL_WIDTH => 8,
+         SIZE => block_ram_depth
+         )
+      port map(
+         addra => block_wr_addr,
+         addrb => block_rd_addr,
+         dia => block_wr_data,
+         clka => aclk,
+         wea => block_we,
+         dob => block_rd_data,
+         enb => '1'
+         );
+   
     cpu_pause       <= cpu_pause_buff;
     cpu_tag         <= cpu_next_address(cache_address_width-1 downto cache_offset_width+cache_index_width);
     cpu_index       <= to_integer(unsigned(cpu_next_address(cache_offset_width+cache_index_width-1 downto cache_offset_width)));
@@ -134,13 +166,59 @@ begin
     end generate
     generate_replace_policy_RR;
 
-    process (aclk)
+    process (aclk, cpu_rd_source, block_rd_data, mem_rd_data, mem_wr_valid_buff, mem_wr_ready,
+             mem_rd_valid, mem_rd_ready_buff, mem_access_mode, cpu_index, cpu_way, cpu_offset,
+             mem_access_needed, mem_way, memory_wr_count, mem_index, replace_offset)
         variable mem_wr_handshake         : Boolean;
         variable mem_rd_handshake         : Boolean;
         variable mem_access_exread_block  : Boolean;
         variable mem_access_exwrite_block : Boolean;
         variable mem_access_word          : Boolean;
+        variable memory_rd_count_next: integer range 0 to 2**word_bits_per_line-1;
+        variable cpu_pause_var : std_logic;
     begin
+
+       mem_wr_handshake         := mem_wr_valid_buff='1' and mem_wr_ready='1';
+       mem_rd_handshake         := mem_rd_valid='1' and mem_rd_ready_buff='1';
+       mem_access_exread_block  := mem_access_mode=READ_BLOCK or mem_access_mode=EXCHANGE_BLOCK;
+       mem_access_exwrite_block := mem_access_mode=WRITE_BLOCK or mem_access_mode=EXCHANGE_BLOCK;
+       mem_access_word          := mem_access_mode=READ_WORD or mem_access_mode=WRITE_WORD;
+
+       if cache_hit and not mem_access_needed then
+          block_rd_addr <= CacheAddr(cpu_index, cpu_way, cpu_offset/4);
+       elsif not mem_access_needed then
+          block_rd_addr <= CacheAddr(mem_index, mem_way, 0);
+       elsif mem_wr_handshake and mem_access_exwrite_block and memory_wr_count<2**word_bits_per_line-1 then
+          block_rd_addr <= CacheAddr(mem_index, mem_way, memory_wr_count);
+       else
+          block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+       end if;
+
+       if mem_access_needed and mem_rd_handshake and mem_access_exread_block then
+          block_we <= (others=>'1');
+          block_wr_addr <= CacheAddr(mem_index, mem_way, memory_rd_count);
+          block_wr_data <= mem_rd_data;
+       elsif mem_access_needed and mem_access_exread_block and (memory_rd_count=2**word_bits_per_line-1) then
+          block_we <= replace_write_enables;
+          block_wr_data <= replace_write_data;
+          block_wr_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+       elsif cache_hit and not mem_access_needed and cpu_pause_buff='0' then
+          block_we <= cpu_wr_byte_en;
+          block_wr_data <= cpu_wr_data;
+          block_wr_addr <= CacheAddr(cpu_index, cpu_way, cpu_offset/4);
+       else
+          block_we <= (others=>'0');
+          block_wr_data <= (others=>'0');
+          block_wr_addr <= (others=>'0');
+       end if;
+
+       case cpu_rd_source is
+          when CACHE =>
+             cpu_rd_data <= block_rd_data;
+          when MEM =>
+             cpu_rd_data <= mem_rd_data;
+       end case;
+       
         if rising_edge(aclk) then
             if aresetn='0' then
                 mem_prepared      <= False;
@@ -151,73 +229,69 @@ begin
                 mem_rd_en_buff    <= '0';
                 cpu_pause_buff    <= '0';
                 valid_rows        <= (others=>(others=>'0'));
+                cpu_rd_source <= CACHE;
             else
+               cpu_pause_var := '0';
+
                 ------------------------------------------
                 -- Memory access 
                 ------------------------------------------
-                if mem_access_needed then               
-                    mem_wr_handshake         := mem_wr_valid_buff='1' and mem_wr_ready='1';
-                    mem_rd_handshake         := mem_rd_valid='1' and mem_rd_ready_buff='1';
-                    mem_access_exread_block  := mem_access_mode=READ_BLOCK or mem_access_mode=EXCHANGE_BLOCK;
-                    mem_access_exwrite_block := mem_access_mode=WRITE_BLOCK or mem_access_mode=EXCHANGE_BLOCK;
-                    mem_access_word          := mem_access_mode=READ_WORD or mem_access_mode=WRITE_WORD;              
+               if mem_access_needed then
+                   cpu_pause_var := '1';
                     if (mem_rd_handshake) then 
                         axi_finished_read <= True;
                     end if;
                     if (mem_wr_handshake) then
                         axi_finished_write <= True;
                     end if;
-                    if mem_wr_handshake and mem_access_exwrite_block and memory_wr_count/=2**block_word_width-1 then
-                        mem_wr_data <= block_rows(mem_index)(mem_way*2**cache_offset_width*8+(memory_wr_count+2)*cpu_data_width-1 downto mem_way*2**cache_offset_width*8+(memory_wr_count+1)*cpu_data_width);
-                    end if;
-                    if mem_rd_handshake and mem_access_exread_block then
-                        block_rows(mem_index)(mem_way*2**cache_offset_width*8+(memory_rd_count+1)*cpu_data_width-1 downto mem_way*2**cache_offset_width*8+memory_rd_count*cpu_data_width) <= mem_rd_data;
+                    if mem_wr_handshake and mem_access_exwrite_block and memory_wr_count/=2**word_bits_per_line-1 then
+                        mem_wr_data <= block_rd_data;
+                        -- Get ready for the next one
+                        -- block_rd_addr set combinatorially
                     end if;
                     if mem_rd_handshake and mem_access_mode=READ_WORD then
-                        cpu_rd_data <= mem_rd_data;
+                       cpu_rd_source <= MEM;
                     end if;                   
-                    if (mem_access_exwrite_block and memory_wr_count=2**block_word_width-1 and block_word_width/=0) or (mem_access_exwrite_block and mem_wr_handshake and block_word_width=0) or (mem_access_mode=WRITE_WORD and mem_wr_handshake) then
+                    if (mem_access_exwrite_block and memory_wr_count=2**word_bits_per_line-1 and word_bits_per_line/=0) or (mem_access_exwrite_block and mem_wr_handshake and word_bits_per_line=0) or (mem_access_mode=WRITE_WORD and mem_wr_handshake) then
                         mem_wr_en_buff <= '0';
                     end if;
-                    if (mem_access_exread_block and memory_rd_count=2**block_word_width-1 and block_word_width/=0) or (mem_access_exread_block and mem_rd_handshake and block_word_width=0) or (mem_access_mode=READ_WORD and mem_rd_handshake) then
+                    if (mem_access_exread_block and memory_rd_count=2**word_bits_per_line-1 and word_bits_per_line/=0) or (mem_access_exread_block and mem_rd_handshake and word_bits_per_line=0) or (mem_access_mode=READ_WORD and mem_rd_handshake) then
                         mem_rd_en_buff <= '0';
                     end if;                   
-                    if (mem_access_exwrite_block and memory_wr_count/=2**block_word_width-1 and block_word_width/=0) or (mem_access_exwrite_block and not mem_wr_handshake and not axi_finished_write and block_word_width=0) or (mem_access_mode=WRITE_WORD and not mem_wr_handshake) then
+                    if (mem_access_exwrite_block and memory_wr_count/=2**word_bits_per_line-1 and word_bits_per_line/=0) or (mem_access_exwrite_block and not mem_wr_handshake and not axi_finished_write and word_bits_per_line=0) or (mem_access_mode=WRITE_WORD and not mem_wr_handshake) then
                         mem_wr_valid_buff <= '1';
                     else
                         mem_wr_valid_buff <= '0';
                     end if;
-                    if ((mem_access_mode=READ_BLOCK or (mem_access_mode=EXCHANGE_BLOCK and memory_rd_count/=memory_wr_count)) and memory_rd_count/=2**block_word_width-1 and block_word_width/=0) or (mem_access_mode=READ_BLOCK and not mem_rd_handshake and block_word_width=0  and not axi_finished_read) or (mem_access_mode=EXCHANGE_BLOCK and not mem_rd_handshake and block_word_width=0  and not axi_finished_read) or (mem_access_mode=READ_WORD and not mem_rd_handshake) then
+                    if ((mem_access_mode=READ_BLOCK or (mem_access_mode=EXCHANGE_BLOCK and memory_rd_count/=memory_wr_count)) and memory_rd_count/=2**word_bits_per_line-1 and word_bits_per_line/=0) or (mem_access_mode=READ_BLOCK and not mem_rd_handshake and word_bits_per_line=0  and not axi_finished_read) or (mem_access_mode=EXCHANGE_BLOCK and not mem_rd_handshake and word_bits_per_line=0  and not axi_finished_read) or (mem_access_mode=READ_WORD and not mem_rd_handshake) then
                         mem_rd_ready_buff <= '1';
                     else
                         mem_rd_ready_buff <= '0';
                     end if;                    
-                    if mem_access_exwrite_block and mem_wr_handshake and memory_wr_count/=2**block_word_width-1 then
+                    if mem_access_exwrite_block and mem_wr_handshake and memory_wr_count/=2**word_bits_per_line-1 then
                         memory_wr_count <= memory_wr_count+1;
                     end if;
-                    if (mem_access_mode=READ_BLOCK or (mem_access_mode=EXCHANGE_BLOCK and memory_rd_count/=memory_wr_count)) and mem_rd_handshake and memory_rd_count/=2**block_word_width-1 then
+                    if (mem_access_mode=READ_BLOCK or (mem_access_mode=EXCHANGE_BLOCK and memory_rd_count/=memory_wr_count)) and mem_rd_handshake and memory_rd_count/=2**word_bits_per_line-1 then
                         memory_rd_count <= memory_rd_count+1;
-                    end if;                    
-                    if mem_access_exread_block and (memory_rd_count=2**block_word_width-1) then
-                        for each_byte in 0 to cpu_data_width/8-1 loop
-                            if or_reduce(replace_write_enables)='1' then
-                                if replace_write_enables(each_byte)='1' then
-                                    block_rows(mem_index)(mem_way*2**cache_offset_width*8+replace_offset*8+(each_byte+1)*8-1 downto mem_way*2**cache_offset_width*8+replace_offset*8+each_byte*8) <= replace_write_data(7+each_byte*8 downto 0+each_byte*8);
-                                end if;
-                            else
-                                cpu_rd_data(7+each_byte*8 downto 0+each_byte*8) <= block_rows(mem_index)(mem_way*2**cache_offset_width*8+replace_offset*8+(each_byte+1)*8-1 downto mem_way*2**cache_offset_width*8+replace_offset*8+each_byte*8);
-                            end if;
-                        end loop;
+                    end if;
+                    -- Prepare the read right before the transaction finishes
+                    if mem_access_exread_block and (memory_rd_count=2**word_bits_per_line-1-1 or word_bits_per_line=0) then
+                       if replace_offset/4 = 2**word_bits_per_line-1 then
+                          cpu_rd_source <= MEM;
+                       else
+                          -- block_rd_addr set combinatorially
+                          cpu_rd_source <= CACHE;
+                       end if;
                     end if;
                     if ((mem_access_exwrite_block or mem_access_exread_block) and mem_wr_en_buff='0' and mem_rd_en_buff='0') or (mem_access_word and (mem_wr_handshake or mem_rd_handshake)) then
                         mem_access_needed <= False;
-                        cpu_pause_buff    <= '0';
+                        cpu_pause_var    := '1';
                     end if;
                 ------------------------------------------
                 -- Address is not in the cacheable range
                 ------------------------------------------    
                 elsif not cacheable_range then
-                    cpu_pause_buff    <= '1';
+                    cpu_pause_var    := '1';
                     mem_access_needed <= True;
                     mem_cache_line    <= '0';
                     if or_reduce(cpu_wr_byte_en)='1' then
@@ -237,58 +311,57 @@ begin
                 -- Cache hit
                 ------------------------------------------ 
                 elsif cache_hit then
-                    for each_byte in 0 to cpu_data_width/8-1 loop
-                        if or_reduce(cpu_wr_byte_en)='1' then
-                            if cpu_wr_byte_en(each_byte)='1' then
-                                block_rows(cpu_index)(cpu_way*2**cache_offset_width*8+cpu_offset*8+(each_byte+1)*8-1 downto cpu_way*2**cache_offset_width*8+cpu_offset*8+each_byte*8) <= cpu_wr_data(7+each_byte*8 downto 0+each_byte*8);
-                            end if;
-                        else
-                            cpu_rd_data(7+each_byte*8 downto 0+each_byte*8) <= block_rows(cpu_index)(cpu_way*2**cache_offset_width*8+cpu_offset*8+(each_byte+1)*8-1 downto cpu_way*2**cache_offset_width*8+cpu_offset*8+each_byte*8);
-                        end if;
-                    end loop;
+                   -- Read address set combinatorially
+                   cpu_rd_source <= CACHE;
                 ------------------------------------------
                 -- Cache miss
                 ------------------------------------------ 
                 elsif not cache_hit then
-                    cpu_pause_buff <= '1';
+                    cpu_pause_var := '1';
                     if not mem_prepared then
                         mem_prepared          <= True;
                         replace_write_enables <= cpu_wr_byte_en;
+                        mem_way            <= replace_way;
+                        mem_index          <= cpu_index;
+                        -- Read address set combinatorially
                     else
                         mem_access_needed  <= True;
                         mem_prepared       <= False;
-                        mem_way            <= replace_way;
                         mem_cache_line     <= '1';
                         replace_write_data <= cpu_wr_data;
                         replace_offset     <= cpu_offset;
-                        tag_rows(cpu_index)((1+replace_way)*tag_width-1 downto replace_way*tag_width) <= cpu_tag;
-                        mem_index          <= cpu_index;
-                        if valid_rows(cpu_index)(replace_way)='1' then
+                        tag_rows(mem_index)((1+mem_way)*tag_width-1 downto mem_way*tag_width) <= cpu_tag;
+                        if valid_rows(mem_index)(mem_way)='1' then
                             mem_access_mode <= EXCHANGE_BLOCK;
                             mem_wr_addr(cpu_addr_width-1 downto cpu_addr_width-4)        <= "0001";
                             mem_wr_addr(cpu_addr_width-5 downto cache_address_width)     <= (others => '0');
-                            mem_wr_addr(cache_address_width-1 downto cache_offset_width) <= tag_rows(cpu_index)((1+replace_way)*tag_width-1 downto replace_way*tag_width) & std_logic_vector(to_unsigned(cpu_index,cache_index_width));
+                            mem_wr_addr(cache_address_width-1 downto cache_offset_width + cache_index_width) <= tag_rows(mem_index)((mem_way+1)*tag_width-1 downto mem_way*tag_width);
+                            mem_wr_addr(cache_offset_width + cache_index_width - 1 downto cache_offset_width) <= std_logic_vector(to_unsigned(mem_index,cache_index_width));
                             mem_wr_addr(cache_offset_width-1 downto 0)                   <= (others=>'0');
                             memory_wr_count    <= 0;
                             mem_wr_byte_en     <= (others=>'1');
                             mem_wr_en_buff     <= '1';
-                            mem_wr_data        <= block_rows(cpu_index)(replace_way*2**cache_offset_width*8+cpu_data_width-1 downto replace_way*2**cache_offset_width*8);
+                            mem_wr_data        <= block_rd_data;
                             axi_finished_write <= False;
                         else
-                            valid_rows(cpu_index)(replace_way) <= '1';
+                            valid_rows(mem_index)(mem_way) <= '1';
                             mem_access_mode                    <= READ_BLOCK;
                         end if;
                         mem_rd_addr(cpu_addr_width-1 downto cpu_addr_width-4)        <= "0001";
                         mem_rd_addr(cpu_addr_width-5 downto cache_address_width)     <= (others => '0');
-                        mem_rd_addr(cache_address_width-1 downto cache_offset_width) <= cpu_tag & std_logic_vector(to_unsigned(cpu_index,cache_index_width));
+                        mem_rd_addr(cache_address_width-1 downto cache_offset_width) <= cpu_tag & std_logic_vector(to_unsigned(mem_index,cache_index_width));
                         mem_rd_addr(cache_offset_width-1 downto 0)                   <= (others=>'0');
                         memory_rd_count   <= 0;
                         mem_rd_en_buff    <= '1';
                         axi_finished_read <= False;
                     end if;
                 end if;
+               cpu_pause_buff <= cpu_pause_var;
             end if;
         end if;
+
     end process;
+
+
     
 end Behavioral;
