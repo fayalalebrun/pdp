@@ -308,6 +308,9 @@ begin
                     if ((mem_access_exwrite_block or mem_access_exread_block) and mem_wr_en_buff='0' and mem_rd_en_buff='0') or (mem_access_word and (mem_wr_handshake or mem_rd_handshake)) then
                         mem_access_needed <= False;
                         cpu_pause_var    := '0';
+                        if not mem_access_word then
+                           valid_rows(mem_index)(mem_way) <= '1';
+                        end if;
                     end if;
                 ------------------------------------------
                 -- Address is not in the cacheable range
@@ -340,6 +343,7 @@ begin
                 elsif not cache_hit then
                     cpu_pause_var := '1';
                     if not mem_prepared then
+                       mem_access_needed  <= False;
                         mem_prepared          <= True;
                         replace_write_enables <= cpu_wr_byte_en;
                         mem_way            <= replace_way;
@@ -364,9 +368,9 @@ begin
                             mem_wr_en_buff     <= '1';
                             axi_finished_write <= False;
                         else
-                            valid_rows(mem_index)(mem_way) <= '1';
-                            mem_access_mode                    <= READ_BLOCK;
+                           mem_access_mode                    <= READ_BLOCK;
                         end if;
+                        valid_rows(mem_index)(mem_way) <= '0';
                         mem_rd_addr(cpu_addr_width-1 downto cpu_addr_width-4)        <= "0001";
                         mem_rd_addr(cpu_addr_width-5 downto cache_address_width)     <= (others => '0');
                         mem_rd_addr(cache_address_width-1 downto cache_offset_width) <= cpu_tag & std_logic_vector(to_unsigned(mem_index,cache_index_width));

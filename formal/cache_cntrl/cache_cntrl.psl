@@ -11,10 +11,12 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
 
    attribute anyconst of f_addr : signal is true;
    -- Address should be word aligned. We make it block aligned too in order for the proof to be easier
-   assume f_addr(cache_offset_width downto 0) = "000";
+   f_addr_aligned: assume always f_addr(cache_offset_width-1 downto 0) = "00";
+
 
    -- CPU addresses are word aligned
-   assume always cpu_next_address(1 downto 0) = "00";
+   fa_cpu_aligned: assume always cpu_next_address(1 downto 0) = "00";
+
 
    signal f_data: std_logic_vector(cpu_data_width-1 downto 0);
 
@@ -32,25 +34,26 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    end process;
 
 
-   signal f_this_return: Boolean; -- Whether the cache is reading from our memory location
+   signal f_this_return: Boolean := false; -- Whether the cache is reading from our memory location
    f_this_return <= mem_rd_en = '1' and mem_rd_addr = f_addr and mem_rd_ready='1';
-   assume always (f_this_return -> next_a[1 to 2] (mem_rd_data = f_data));
+   signal f_mem_matches: Boolean;
+   f_mem_matches <= mem_rd_data = f_data;
+   fa_read_data: assume always prev(f_this_return) -> f_mem_matches;
+   fa_read_stable: assume always (not mem_rd_en) -> stable(mem_rd_data);
 
    -- Valid signal should appear only when memory is enabled and ready
-   assume always (mem_rd_en and mem_rd_ready -> next (mem_rd_valid));
-   assume always (mem_rd_valid -> prev(mem_rd_en and mem_rd_ready));
+   fa_valid2: assume always ((mem_rd_valid = '1') = (mem_rd_en = '1' and mem_rd_ready = '1' and stable(mem_rd_ready)));
 
    -- CPU inputs do not change while pause is asserted
-   assume always (cpu_pause -> (stable(cpu_next_address) and stable(cpu_wr_data) and stable(cpu_wr_byte_en)));
+   fa_pause: assume always (cpu_pause -> (stable(cpu_next_address) and stable(cpu_wr_data) and stable(cpu_wr_byte_en)));
    
-   assume always aresetn;
-   assume always mem_wr_ready;
+   fa_reset: assume always aresetn;
+   fa_wr_ready: assume always mem_wr_ready;
 
    signal f_cpu_read: Boolean; -- Whether the CPU is trying to read our address
-   f_cpu_read <= (cpu_next_address = f_addr) and (cpu_pause = '0') and (or_reduce(cpu_wr_byte_en) = '0');
+   f_cpu_read <= (cpu_next_address = f_addr) and (or_reduce(cpu_wr_byte_en) = '0');-- and (cpu_pause = '0');
 
-   f_read_no_pause: assert always f_cpu_read -> next ((not cpu_pause) -> (cpu_rd_data = f_data));
-   f_read_pause: assert always {f_cpu_read; cpu_pause [+]; {not cpu_pause [->]}} |-> {(cpu_rd_data = f_data)}!;
+   f_read: assert always f_cpu_read -> next ( (not cpu_pause) -> (cpu_rd_data = f_data));
 
    signal f_mem_write: Boolean; -- The cache is writing to the memory at our location
    f_mem_write <= mem_wr_en = '1' and rose(mem_wr_valid) and mem_wr_addr = f_addr;
@@ -68,9 +71,14 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    f_offset <= Offset(f_addr);
    f_location <= FindInCache(f_index, f_tag);
 
-   f_cache_data: assert always (f_location.hit and not cpu_pause
-   		 	       and CacheableRange(f_addr) and not or_reduce(block_we)
-			       and block_rd_addr = CacheAddr(f_index, f_location.way, f_offset/4)) ->
-   		 	       next (block_rd_data = f_data);
+   property f_in_cache is (f_location.hit and CacheableRange(f_addr)) -> (block_ram(to_integer(unsigned(CacheAddr(f_index, f_location.way, f_offset/4)))) = f_data);
 
+   f_cache_data: assert always f_in_cache;
+
+   f_mem_sigs: assert always (not mem_access_needed) -> not (mem_wr_valid or mem_wr_en or mem_rd_en or mem_rd_ready);
+   f_mem_prepared: assert always ((mem_prepared -> (not cache_hit)) and (mem_access_needed -> (not mem_prepared)));
+
+   f_one_cycle: assert always (f_location.hit and CacheableRange(f_addr)
+   		       	      and cpu_next_address = f_addr and cpu_pause='0')
+			      -> next (cpu_pause='0');
 }
