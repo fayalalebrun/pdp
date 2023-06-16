@@ -56,4 +56,21 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    f_mem_write <= mem_wr_en = '1' and rose(mem_wr_valid) and mem_wr_addr = f_addr;
    f_write_mem_1: assert always (f_mem_write and mem_wr_byte_en(0)) -> ((mem_wr_data(7 downto 0) = f_data(7 downto 0)));
    -- TODO
+
+
+   -- If there is a cache hit, then the memory in the corresponding cache location should correspond to our data
+   signal f_location: cache_location_t;
+   signal f_index: integer;
+   signal f_tag: std_logic_vector(tag_width-1 downto 0);
+   signal f_offset: integer;
+   f_index <= Index(f_addr);
+   f_tag <= Tag(f_addr);
+   f_offset <= Offset(f_addr);
+   f_location <= FindInCache(f_index, f_tag);
+
+   f_cache_data: assert always (f_location.hit and not cpu_pause
+   		 	       and CacheableRange(f_addr) and not or_reduce(block_we)
+			       and block_rd_addr = CacheAddr(f_index, f_location.way, f_offset/4)) ->
+   		 	       next (block_rd_data = f_data);
+
 }

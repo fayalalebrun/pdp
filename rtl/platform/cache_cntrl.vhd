@@ -93,6 +93,48 @@ architecture Behavioral of cache_cntrl is
        return std_logic_vector(to_unsigned(index*2**word_bits_per_line + way * 2**cache_index_width * 2**word_bits_per_line + offset, block_rd_addr'length));
     end function;
 
+    type cache_location_t is record
+       hit: Boolean;
+       way: integer range 0 to 2**cache_way_width-1;
+    end record cache_location_t;
+
+    impure function FindInCache(index: integer; tag: std_logic_vector) return cache_location_t is
+       variable hit_buff : Boolean;
+       variable way_buff : integer range 0 to 2**cache_way_width-1 := 0;
+       variable tag_buff     : std_logic_vector(tag_width-1 downto 0);
+    begin
+       hit_buff := False;
+       way_buff := 0;
+       for each_way in 0 to 2**cache_way_width-1 loop
+          tag_buff := tag_rows(index)((each_way+1)*tag_width-1 downto each_way*tag_width);
+          if tag_buff=tag and valid_rows(index)(each_way)='1' then
+             hit_buff := True;
+             way_buff := each_way;
+             exit;
+          end if;
+       end loop;
+       return (hit => hit_buff, way => way_buff);
+    end function;
+
+    function Index(address: std_logic_vector) return integer is
+    begin
+       return to_integer(unsigned(address(cache_offset_width+cache_index_width-1 downto cache_offset_width)));
+    end function;
+
+    function Tag(address: std_logic_vector) return std_logic_vector is
+    begin
+       return address(cache_address_width-1 downto cache_offset_width+cache_index_width);
+    end function;
+
+    function Offset(address: std_logic_vector) return integer is
+    begin
+       return to_integer(unsigned(address(cache_offset_width-1 downto 0)));
+    end function;
+
+    function CacheableRange(address: std_logic_vector) return Boolean is
+    begin
+       return address(cpu_addr_width-1 downto cpu_addr_width-4) = "0001" and or_reduce(address(cpu_addr_width-5 downto cache_address_width))='0';
+    end function;
 begin
 
    block_mem: entity work.bytewrite_sdp_ram_wf(byte_wr_ram_wf)
@@ -112,10 +154,10 @@ begin
          );
    
     cpu_pause       <= cpu_pause_buff;
-    cpu_tag         <= cpu_next_address(cache_address_width-1 downto cache_offset_width+cache_index_width);
-    cpu_index       <= to_integer(unsigned(cpu_next_address(cache_offset_width+cache_index_width-1 downto cache_offset_width)));
-    cpu_offset      <= to_integer(unsigned(cpu_next_address(cache_offset_width-1 downto 0)));
-    cacheable_range <= True when (cpu_next_address(cpu_addr_width-1 downto cpu_addr_width-4) = "0001" and or_reduce(cpu_next_address(cpu_addr_width-5 downto cache_address_width))='0') else False;
+    cpu_tag         <= Tag(cpu_next_address);
+    cpu_index       <= Index(cpu_next_address);
+    cpu_offset      <= Offset(cpu_next_address);
+    cacheable_range <= CacheableRange(cpu_next_address);
     
     mem_wr_en       <= mem_wr_en_buff;
     mem_wr_valid    <= mem_wr_valid_buff;
@@ -123,22 +165,11 @@ begin
     mem_rd_en       <= mem_rd_en_buff;
     
     process(cpu_index, cpu_tag ,tag_rows ,valid_rows)
-        variable cpu_hit_buff : Boolean;
-        variable cpu_way_buff : integer range 0 to 2**cache_way_width-1 := 0;
-        variable tag_buff     : std_logic_vector(tag_width-1 downto 0);
+        variable location: cache_location_t;
     begin
-        cpu_hit_buff := False;
-        cpu_way_buff := 0;
-        for each_way in 0 to 2**cache_way_width-1 loop
-            tag_buff := tag_rows(cpu_index)((each_way+1)*tag_width-1 downto each_way*tag_width);
-            if tag_buff=cpu_tag and valid_rows(cpu_index)(each_way)='1' then
-                cpu_hit_buff := True;
-                cpu_way_buff := each_way;
-                exit;
-            end if;
-        end loop;
-        cache_hit <= cpu_hit_buff;
-        cpu_way   <= cpu_way_buff;
+        location := FindInCache(cpu_index, cpu_tag);
+        cache_hit <= location.hit and cacheable_range;
+        cpu_way   <= location.way;
     end process; 
     
     generate_replace_policy_RR:
