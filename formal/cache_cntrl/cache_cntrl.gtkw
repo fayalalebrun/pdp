@@ -1,0 +1,111 @@
+[*]
+[*] GTKWave Analyzer v3.3.115 (w)1999-2023 BSI
+[*] Fri Jun 16 07:48:07 2023
+[*]
+[dumpfile] "/home/fal/classes/pdp/PDP/formal/cache_cntrl/cache_cntrl_prove/engine_0/trace.vcd"
+[dumpfile_mtime] "Fri Jun 16 07:41:24 2023"
+[dumpfile_size] 33354
+[savefile] "/home/fal/classes/pdp/PDP/formal/cache_cntrl/cache_cntrl.gtkw"
+[timestart] 0
+[size] 2130 1094
+[pos] -1 -1
+*-5.148461 130 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] cache_cntrl.
+[sst_width] 269
+[signals_width] 338
+[sst_expanded] 1
+[sst_vpaned_height] 315
+@28
+cache_cntrl.aresetn
+cache_cntrl.aclk
+@22
+[color] 3
+cache_cntrl.i_cache_cntrl.f_data[31:0]
+[color] 3
+cache_cntrl.i_cache_cntrl.f_addr[31:0]
+@28
+[color] 3
+cache_cntrl.i_cache_cntrl.f_this_return
+@22
+[color] 4
+cache_cntrl.cpu_next_address[31:0]
+[color] 4
+cache_cntrl.cpu_rd_data[31:0]
+[color] 4
+cache_cntrl.cpu_wr_data[31:0]
+[color] 4
+cache_cntrl.cpu_wr_byte_en[3:0]
+@28
+[color] 4
+cache_cntrl.cpu_pause
+@22
+[color] 5
+cache_cntrl.mem_rd_addr[31:0]
+[color] 5
+cache_cntrl.mem_rd_data[31:0]
+@28
+[color] 5
+cache_cntrl.mem_rd_en
+[color] 5
+cache_cntrl.mem_rd_valid
+[color] 5
+cache_cntrl.mem_rd_ready
+@22
+[color] 1
+cache_cntrl.mem_wr_addr[31:0]
+[color] 1
+cache_cntrl.mem_wr_data[31:0]
+@28
+[color] 1
+cache_cntrl.mem_wr_en
+[color] 1
+cache_cntrl.mem_wr_valid
+[color] 1
+cache_cntrl.mem_wr_ready
+@22
+[color] 3
+cache_cntrl.block_rd_addr[5:0]
+[color] 3
+cache_cntrl.block_rd_data[31:0]
+[color] 3
+cache_cntrl.block_wr_addr[5:0]
+[color] 3
+cache_cntrl.block_wr_data[31:0]
+[color] 3
+cache_cntrl.block_we[3:0]
+@28
+cache_cntrl.cache_hit
+cache_cntrl.mem_access_needed
+@22
+[color] 2
+cache_cntrl.cpu_index[3:0]
+@28
+[color] 2
+cache_cntrl.cpu_rd_source
+@22
+[color] 2
+cache_cntrl.cpu_tag[8:0]
+@29
+[color] 2
+cache_cntrl.cpu_offset[2:0]
+@28
+[color] 2
+cache_cntrl.cpu_way
+@22
+cache_cntrl.mem_index[3:0]
+@28
+cache_cntrl.mem_way
+@22
+cache_cntrl.replace_write_data[31:0]
+@28
+cache_cntrl.replace_way
+@22
+cache_cntrl.replace_write_enables[3:0]
+@28
+cache_cntrl.i_cache_cntrl.f_cpu_write
+cache_cntrl.i_cache_cntrl.f_cpu_read
+@22
+cache_cntrl.valid_rows[31:0]
+cache_cntrl.tag_rows[287:0]
+[pattern_trace] 1
+[pattern_trace] 0

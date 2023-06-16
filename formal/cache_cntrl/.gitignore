@@ -1,0 +1,6 @@
+cache_cntrl_prove/*
+cache_cntrl_cover/*
+*.o
+*.cf
+yosys.log
+cache_cntrl.edif

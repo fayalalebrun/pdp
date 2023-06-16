@@ -1,0 +1,59 @@
+vunit i_cache_cntrl(cache_cntrl(Behavioral))
+{ 
+
+   
+   default clock is rising_edge(aclk);
+
+   signal f_addr: std_logic_vector(cpu_addr_width-1 downto 0);
+   
+
+   attribute anyconst : boolean;
+
+   attribute anyconst of f_addr : signal is true;
+   -- Address should be word aligned. We make it block aligned too in order for the proof to be easier
+   assume f_addr(cache_offset_width downto 0) = "000";
+
+   -- CPU addresses are word aligned
+   assume always cpu_next_address(1 downto 0) = "00";
+
+   signal f_data: std_logic_vector(cpu_data_width-1 downto 0);
+
+   signal f_cpu_write: Boolean; -- Whether the cpu is writing to our memory location
+   f_cpu_write <= cpu_next_address = f_addr and cpu_pause='0' and or_reduce(cpu_wr_byte_en)='1';
+
+   process(all)
+   begin
+      if rising_edge(aclk) then
+         f_data(7 downto 0) <= cpu_wr_data(7 downto 0) when f_cpu_write and cpu_wr_byte_en(0) = '1';
+      	 f_data(15 downto 8) <= cpu_wr_data(15 downto 8) when f_cpu_write and cpu_wr_byte_en(1) = '1';
+      	 f_data(23 downto 16) <= cpu_wr_data(23 downto 16) when f_cpu_write and cpu_wr_byte_en(2) = '1';
+         f_data(31 downto 24) <= cpu_wr_data(31 downto 24) when f_cpu_write and cpu_wr_byte_en(3) = '1';
+      end if;
+   end process;
+
+
+   signal f_this_return: Boolean; -- Whether the cache is reading from our memory location
+   f_this_return <= mem_rd_en = '1' and mem_rd_addr = f_addr and mem_rd_ready='1';
+   assume always (f_this_return -> next_a[1 to 2] (mem_rd_data = f_data));
+
+   -- Valid signal should appear only when memory is enabled and ready
+   assume always (mem_rd_en and mem_rd_ready -> next (mem_rd_valid));
+   assume always (mem_rd_valid -> prev(mem_rd_en and mem_rd_ready));
+
+   -- CPU inputs do not change while pause is asserted
+   assume always (cpu_pause -> (stable(cpu_next_address) and stable(cpu_wr_data) and stable(cpu_wr_byte_en)));
+   
+   assume always aresetn;
+   assume always mem_wr_ready;
+
+   signal f_cpu_read: Boolean; -- Whether the CPU is trying to read our address
+   f_cpu_read <= (cpu_next_address = f_addr) and (cpu_pause = '0') and (or_reduce(cpu_wr_byte_en) = '0');
+
+   f_read_no_pause: assert always f_cpu_read -> next ((not cpu_pause) -> (cpu_rd_data = f_data));
+   f_read_pause: assert always {f_cpu_read; cpu_pause [+]; {not cpu_pause [->]}} |-> {(cpu_rd_data = f_data)}!;
+
+   signal f_mem_write: Boolean; -- The cache is writing to the memory at our location
+   f_mem_write <= mem_wr_en = '1' and rose(mem_wr_valid) and mem_wr_addr = f_addr;
+   f_write_mem_1: assert always (f_mem_write and mem_wr_byte_en(0)) -> ((mem_wr_data(7 downto 0) = f_data(7 downto 0)));
+   -- TODO
+}

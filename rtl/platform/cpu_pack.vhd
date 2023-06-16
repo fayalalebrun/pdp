@@ -19,7 +19,7 @@ package cpu_pack is
     constant default_cache_enable         : string  := "True";  -- False
     
     -- functions declaration
-    function clogb2(bit_depth : in integer ) return integer;
+    function clogb2(bit_depth : in natural ) return natural;
     function flogb2(bit_depth : in natural ) return integer;
     
     -- components declaration
