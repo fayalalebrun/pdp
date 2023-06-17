@@ -1,8 +1,15 @@
 vunit i_cache_cntrl(cache_cntrl(Behavioral))
-{ 
-
-   
+{
    default clock is rising_edge(aclk);
+
+   signal f_prev_valid: Boolean := false;
+
+   process(aclk)
+   begin
+	if rising_edge(aclk) then
+	   f_prev_valid <= true;
+	end if;
+   end process;
 
    signal f_addr: std_logic_vector(cpu_addr_width-1 downto 0);
    
@@ -45,15 +52,17 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    fa_valid2: assume always ((mem_rd_valid = '1') = (mem_rd_en = '1' and mem_rd_ready = '1' and stable(mem_rd_ready)));
 
    -- CPU inputs do not change while pause is asserted
-   fa_pause: assume always (cpu_pause -> (stable(cpu_next_address) and stable(cpu_wr_data) and stable(cpu_wr_byte_en)));
-   
-   fa_reset: assume always aresetn;
+   fa_pause: assume always (cpu_pause -> (stable(cpu_next_address) and stable(cpu_wr_data)));
+   fa_we: assume always (cpu_pause -> (cpu_wr_byte_en = "0000"));
+
+   fa_reset_init: assume (not aresetn);
+   fa_reset: assume always (f_prev_valid -> aresetn);
    fa_wr_ready: assume always mem_wr_ready = (prev(mem_wr_en and mem_wr_valid) and (mem_wr_en and mem_wr_valid));
 
    signal f_cpu_read: Boolean; -- Whether the CPU is trying to read our address
-   f_cpu_read <= (cpu_next_address = f_addr) and (or_reduce(cpu_wr_byte_en) = '0');-- and (cpu_pause = '0');
+   f_cpu_read <= (cpu_next_address = f_addr) and (or_reduce(cpu_wr_byte_en) = '0') and (cpu_pause='0');
 
-   f_read: assert always f_cpu_read -> next ( (not cpu_pause) -> (cpu_rd_data = f_data));
+   f_read: assert always (f_cpu_read and f_prev_valid) -> next next_event(not cpu_pause)((cpu_rd_data = f_data));
 
    fa_mem_write_stable: assert always ((mem_wr_en and stable(mem_wr_en) and not prev(mem_wr_valid)) -> (stable(mem_wr_addr) and stable(mem_wr_data) and stable(mem_wr_byte_en)));
    signal f_mem_write: Boolean; -- The cache is writing to the memory at our location
