@@ -188,7 +188,8 @@ begin
 
     process (aclk, cpu_rd_source, block_rd_data, mem_rd_data, mem_wr_valid_buff, mem_wr_ready,
              mem_rd_valid, mem_rd_ready_buff, mem_access_mode, cpu_index, cpu_way, cpu_offset,
-             mem_access_needed, mem_way, memory_wr_count, mem_index, replace_offset)
+             mem_access_needed, mem_way, memory_wr_count, mem_index, replace_offset, cpu_wr_data,
+             replace_write_enables, replace_write_data, cpu_wr_byte_en)
         variable mem_wr_handshake         : Boolean;
         variable mem_rd_handshake         : Boolean;
         variable mem_access_exread_block  : Boolean;
