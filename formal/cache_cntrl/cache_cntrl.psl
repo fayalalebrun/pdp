@@ -93,4 +93,18 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    f_one_cycle: assert always (f_location.hit and CacheableRange(f_addr)
    		       	      and cpu_next_address = f_addr and cpu_pause='0')
 			      -> next (cpu_pause='0');
+
+  c_req: cover {
+     (cpu_pause = '0' and cpu_next_address=f_addr);
+     {cpu_pause = '1'} [*];
+     (cpu_pause = '0' and cpu_next_address/=f_addr);
+     {cpu_pause = '1'} [*];
+     (cpu_pause = '0' and cpu_next_address=f_addr and cpu_wr_byte_en="1111" and cpu_wr_data /= f_data);
+     (cpu_pause = '0' and cpu_next_address=f_addr);
+     (cpu_pause = '0' and cpu_next_address/=f_addr and Index(f_addr)=Index(cpu_next_address) and CacheableRange(cpu_next_address));
+     {cpu_pause = '1'} [*];
+     (cpu_pause = '0' and cpu_next_address=f_addr);
+     {cpu_pause = '1'} [*];
+     cpu_pause = '0'
+  };
 }
