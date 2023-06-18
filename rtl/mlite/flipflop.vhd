@@ -33,6 +33,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity flipflop is
     Port ( clk : in STD_LOGIC;
+		   ce  : in STD_LOGIC;
            reset : in STD_LOGIC;
            D : in STD_LOGIC;
            Q : out STD_LOGIC);
@@ -46,7 +47,7 @@ begin
 
     if reset = '1' then
         Q <= '0';
-    elsif rising_edge(clk) then
+    elsif ce = '1' and rising_edge(clk) then
         Q <= D;        
     end if;
 

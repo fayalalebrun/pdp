@@ -215,7 +215,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000100";
+                   count_reg <= "000010";
                end if;   
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
@@ -261,7 +261,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000100";
+                   count_reg <= "000010";
                end if;               
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
