@@ -32,9 +32,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 --use UNISIM.VComponents.all;
 
 entity flipflop is
-    Port ( clk : in STD_LOGIC;
-		   ce  : in STD_LOGIC;
-           reset : in STD_LOGIC;
+    Port ( C : in STD_LOGIC;
+--		   CE  : in STD_LOGIC;
+           CLR : in STD_LOGIC;
            D : in STD_LOGIC;
            Q : out STD_LOGIC);
 end flipflop;
@@ -42,12 +42,12 @@ end flipflop;
 architecture Behavioral of flipflop is
 
 begin
-process(clk, reset)
+process(C, CLR, D)
 begin
 
-    if reset = '1' then
+    if CLR = '1' then
         Q <= '0';
-    elsif ce = '1' and rising_edge(clk) then
+    elsif rising_edge(C) then
         Q <= D;        
     end if;
 

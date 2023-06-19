@@ -112,7 +112,7 @@ architecture logic of mult is
    signal sign_or_unsigned: std_logic := '0';
    signal upper_fa_res, lower_fa_res: std_logic_vector(31 downto 0);
    signal fa_res: std_logic_vector(63 downto 0);
-   signal a_copy, b_copy: std_logic_vector(31 downto 0);
+
 begin
     -- mux for radix-4
    m1: mux4x1 
@@ -185,9 +185,7 @@ begin
          a_select <= "00";            
          sign_or_unsigned <= '0';
          enable_array_mult <= '0';
-         a_copy <= ZERO;
-         b_copy <= ZERO;
-         
+
       elsif rising_edge(clk) then
          case mult_func is
             when MULT_WRITE_LO =>
@@ -215,7 +213,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000010";
+                   count_reg <= "000100";
                end if;   
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
@@ -230,8 +228,6 @@ begin
                -- for Full array mult
                sign_or_unsigned <= '0';
                enable_array_mult <= '1';
-               a_copy <= a;
-               b_copy <= b;
                
             when MULT_SIGNED_MULT =>
                mode_reg <= MODE_MULT;
@@ -261,7 +257,7 @@ begin
                elsif mult_type = "radix_4" then
                    count_reg <= "010010"; 
                elsif mult_type = "FULL_ARRAY" then
-                   count_reg <= "000010";
+                   count_reg <= "000100";
                end if;               
                negate_reg_LO <= '0';
                negate_reg_HI <= '0';
@@ -272,8 +268,6 @@ begin
                -- New Signal assignment for radix-4
                sign_or_unsigned <= '1';
                enable_array_mult <= '1';
-               a_copy <= a;
-               b_copy <= b;
                
             when MULT_DIVIDE =>
                mode_reg <= MODE_DIV;
