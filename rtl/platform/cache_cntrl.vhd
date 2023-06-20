@@ -13,10 +13,10 @@ entity cache_cntrl is
         cpu_addr_width       : integer := 32;
         cpu_data_width       : integer := 32;
         -- cache params       
-        cache_way_width      : integer := 1;            -- # blocks per cache line; associativity = 2^cache_way_width
-        cache_index_width    : integer := 4;            -- # of cache lines = 2^cache_index_width
-        cache_offset_width   : integer := 3;            -- # of bytes per block = 2^cache_offset_width
-        cache_address_width  : integer := 16;           -- address width for cacheable range
+        cache_way_width      : integer := 0;            -- # blocks per cache line; associativity = 2^cache_way_width
+        cache_index_width    : integer := 2;            -- # of cache lines = 2^cache_index_width
+        cache_offset_width   : integer := 2;            -- # of bytes per block = 2^cache_offset_width
+        cache_address_width  : integer := 23;           -- address width for cacheable range
         cache_replace_policy : string := "RR"           -- replacement policy when cache miss: "RR"
     );               
     port ( 
@@ -205,8 +205,10 @@ begin
        mem_access_exwrite_block := mem_access_mode=WRITE_BLOCK or mem_access_mode=EXCHANGE_BLOCK;
        mem_access_word          := mem_access_mode=READ_WORD or mem_access_mode=WRITE_WORD;
 
-       if cache_hit and not mem_access_needed then
+       if (cache_hit and not mem_access_needed) then
           block_rd_addr <= CacheAddr(cpu_index, cpu_way, cpu_offset/4);
+       elsif not mem_access_needed and not mem_prepared then
+          block_rd_addr <= CacheAddr(cpu_index, replace_way, cpu_offset/4);
        elsif not mem_access_needed then
           block_rd_addr <= CacheAddr(mem_index, mem_way, 0);
        elsif mem_wr_handshake and mem_access_exwrite_block and memory_wr_count<2**word_bits_per_line-1 then
@@ -231,12 +233,6 @@ begin
           block_we <= (others=>'0');
           block_wr_data <= (others=>'0');
           block_wr_addr <= (others=>'0');
-       end if;
-
-       if cacheable_range then
-          mem_wr_data <= block_rd_data;
-       else
-          mem_wr_data <= cpu_wr_data;
        end if;
 
        case cpu_rd_source is
@@ -274,7 +270,11 @@ begin
 
                     if mem_rd_handshake and mem_access_mode=READ_WORD then
                        cpu_rd_source <= MEM;
-                    end if;                   
+                    end if;
+
+                   if mem_wr_handshake and mem_access_exwrite_block and memory_wr_count/=2**word_bits_per_line-1 then
+                      mem_wr_data <= block_rd_data;
+                   end if;
                     if (mem_access_exwrite_block and memory_wr_count=2**word_bits_per_line-1 and word_bits_per_line/=0) or (mem_access_exwrite_block and mem_wr_handshake and word_bits_per_line=0) or (mem_access_mode=WRITE_WORD and mem_wr_handshake) then
                         mem_wr_en_buff <= '0';
                     end if;
@@ -324,6 +324,7 @@ begin
                         mem_access_mode <= WRITE_WORD;
                         mem_wr_addr     <= cpu_next_address;
                         mem_wr_byte_en  <= cpu_wr_byte_en;
+                        mem_wr_data <= cpu_wr_data;
                         memory_wr_count <= 0;
                         mem_wr_en_buff  <= '1';
                     else
@@ -364,6 +365,7 @@ begin
                             mem_wr_addr(cache_address_width-1 downto cache_offset_width + cache_index_width) <= tag_rows(mem_index)((mem_way+1)*tag_width-1 downto mem_way*tag_width);
                             mem_wr_addr(cache_offset_width + cache_index_width - 1 downto cache_offset_width) <= std_logic_vector(to_unsigned(mem_index,cache_index_width));
                             mem_wr_addr(cache_offset_width-1 downto 0)                   <= (others=>'0');
+                            mem_wr_data <= block_rd_data;
                             memory_wr_count    <= 0;
                             mem_wr_byte_en     <= (others=>'1');
                             mem_wr_en_buff     <= '1';

@@ -64,9 +64,9 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
 
    f_read: assert always (f_cpu_read and f_prev_valid) -> next next_event(not cpu_pause)((cpu_rd_data = f_data));
 
-   fa_mem_write_stable: assert always ((mem_wr_en and stable(mem_wr_en) and not prev(mem_wr_valid)) -> (stable(mem_wr_addr) and stable(mem_wr_data) and stable(mem_wr_byte_en)));
+   fa_mem_write_stable: assert always ((mem_wr_valid and mem_wr_en and stable(mem_wr_en)) -> (stable(mem_wr_addr) and stable(mem_wr_data) and stable(mem_wr_byte_en)));
    signal f_mem_write: Boolean; -- The cache is writing to the memory at our location
-   f_mem_write <= mem_wr_en = '1' and rose(mem_wr_valid) and mem_wr_addr = f_addr;
+   f_mem_write <= mem_wr_valid='1' and mem_wr_en='1' and mem_wr_ready='1' and mem_wr_addr = f_addr;
    f_write_mem_1: assert always (f_mem_write and mem_wr_byte_en(0)) -> ((mem_wr_data(7 downto 0) = f_data(7 downto 0)));
    f_write_mem_2: assert always (f_mem_write and mem_wr_byte_en(1)) -> ((mem_wr_data(15 downto 8) = f_data(15 downto 8)));
    f_write_mem_3: assert always (f_mem_write and mem_wr_byte_en(2)) -> ((mem_wr_data(23 downto 16) = f_data(23 downto 16)));
