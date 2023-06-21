@@ -15,7 +15,7 @@ entity cache_cntrl is
         -- cache params       
         cache_way_width      : integer := 0;            -- # blocks per cache line; associativity = 2^cache_way_width
         cache_index_width    : integer := 2;            -- # of cache lines = 2^cache_index_width
-        cache_offset_width   : integer := 2;            -- # of bytes per block = 2^cache_offset_width
+        cache_offset_width   : integer := 4;            -- # of bytes per block = 2^cache_offset_width
         cache_address_width  : integer := 23;           -- address width for cacheable range
         cache_replace_policy : string := "RR"           -- replacement policy when cache miss: "RR"
     );               
@@ -82,8 +82,9 @@ architecture Behavioral of cache_cntrl is
     signal lfsr                  : std_logic_vector(lfsr_width-1 downto 0) := X"ace1";
     signal axi_finished_read     : Boolean := False;
     signal axi_finished_write    : Boolean := False;
-    type cpu_rd_source_type is (MEM, CACHE);
+    type cpu_rd_source_type is (BUFF, BRAM);
     signal cpu_rd_source: cpu_rd_source_type;
+    signal cpu_rd_buff: std_logic_vector(cpu_data_width-1 downto 0);
 
     type ram_type is array (0 to block_ram_depth - 1) of std_logic_vector(4 * 8 - 1 downto 0);
     shared variable block_ram : ram_type := (others => (others => '0'));
@@ -187,7 +188,7 @@ begin
     generate_replace_policy_RR;
 
     process (aclk, cpu_rd_source, block_rd_data, mem_rd_data, mem_wr_valid_buff, mem_wr_ready,
-             mem_rd_valid, mem_rd_ready_buff, mem_access_mode, cpu_index, cpu_way, cpu_offset,
+             mem_rd_valid, mem_rd_ready_buff, mem_rd_en_buff,mem_access_mode, cpu_index, cpu_way, cpu_offset,
              mem_access_needed, mem_way, memory_wr_count, mem_index, replace_offset, cpu_wr_data,
              replace_write_enables, replace_write_data, cpu_wr_byte_en)
         variable mem_wr_handshake         : Boolean;
@@ -207,14 +208,20 @@ begin
 
        if (cache_hit and not mem_access_needed) then
           block_rd_addr <= CacheAddr(cpu_index, cpu_way, cpu_offset/4);
-       elsif not mem_access_needed and not mem_prepared then
-          block_rd_addr <= CacheAddr(cpu_index, replace_way, cpu_offset/4);
-       elsif not mem_access_needed then
-          block_rd_addr <= CacheAddr(mem_index, mem_way, 0);
-       elsif mem_wr_handshake and mem_access_exwrite_block and memory_wr_count<2**word_bits_per_line-1 then
-          block_rd_addr <= CacheAddr(mem_index, mem_way, memory_wr_count);
+       elsif mem_access_needed then
+          if mem_rd_en_buff = '0' and (memory_rd_count = 2**word_bits_per_line - 1) then
+                block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+          elsif mem_wr_ready = '0' then
+             block_rd_addr <= CacheAddr(mem_index, mem_way, 1);
+          else
+             if (memory_wr_count = 2**word_bits_per_line - 1) then
+                block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+             else
+                block_rd_addr <= CacheAddr(mem_index, mem_way, memory_wr_count+2);
+             end if;
+          end if;
        else
-          block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+          block_rd_addr <= CacheAddr(cpu_index, mem_way, 0);
        end if;
 
        if mem_access_needed and mem_rd_handshake and mem_access_exread_block then
@@ -236,10 +243,10 @@ begin
        end if;
 
        case cpu_rd_source is
-          when CACHE =>
+          when BRAM =>
              cpu_rd_data <= block_rd_data;
-          when MEM =>
-             cpu_rd_data <= mem_rd_data;
+          when BUFF =>
+             cpu_rd_data <= cpu_rd_buff;
        end case;
        
         if rising_edge(aclk) then
@@ -252,7 +259,7 @@ begin
                 mem_rd_en_buff    <= '0';
                 cpu_pause_buff    <= '0';
                 valid_rows        <= (others=>(others=>'0'));
-                cpu_rd_source <= CACHE;
+                cpu_rd_source <= BRAM;
             else
                cpu_pause_var := '0';
 
@@ -269,7 +276,8 @@ begin
                     end if;
 
                     if mem_rd_handshake and mem_access_mode=READ_WORD then
-                       cpu_rd_source <= MEM;
+                       cpu_rd_source <= BUFF;
+                       cpu_rd_buff <= mem_rd_data;
                     end if;
 
                    if mem_wr_handshake and mem_access_exwrite_block and memory_wr_count/=2**word_bits_per_line-1 then
@@ -299,12 +307,7 @@ begin
                     end if;
                     -- Prepare the read right before the transaction finishes
                     if mem_access_exread_block and (memory_rd_count=2**word_bits_per_line-1-1 or word_bits_per_line=0) then
-                       if replace_offset/4 = 2**word_bits_per_line-1 then
-                          cpu_rd_source <= MEM;
-                       else
-                          -- block_rd_addr set combinatorially
-                          cpu_rd_source <= CACHE;
-                       end if;
+                          cpu_rd_source <= BRAM;
                     end if;
                     if ((mem_access_exwrite_block or mem_access_exread_block) and mem_wr_en_buff='0' and mem_rd_en_buff='0') or (mem_access_word and (mem_wr_handshake or mem_rd_handshake)) then
                         mem_access_needed <= False;
@@ -338,7 +341,7 @@ begin
                 ------------------------------------------ 
                 elsif cache_hit then
                    -- Read address set combinatorially
-                   cpu_rd_source <= CACHE;
+                   cpu_rd_source <= BRAM;
                 ------------------------------------------
                 -- Cache miss
                 ------------------------------------------ 

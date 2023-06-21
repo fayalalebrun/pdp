@@ -17,9 +17,10 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
    attribute anyconst : boolean;
 
    attribute anyconst of f_addr : signal is true;
-   -- Address should be word aligned. We make it block aligned too in order for the proof to be easier
-   f_addr_aligned: assume always f_addr(cache_offset_width-1 downto 0) = "00";
 
+   -- Address should be word aligned.
+   f_addr_aligned: assume always f_addr(1 downto 0) = "00";
+                    
 
    -- CPU addresses are word aligned
    fa_cpu_aligned: assume always cpu_next_address(1 downto 0) = "00";
@@ -40,13 +41,34 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
       end if;
    end process;
 
+   -- Counts the number of words read so far from memory
+   signal mem_rd_count: unsigned(word_bits_per_line downto 0) := (others => '0');
+   -- Counts the number of words written so far to memory
+   signal mem_wr_count: unsigned(word_bits_per_line downto 0) := (others => '0');
+
+   process(all)
+   begin
+      if(rising_edge(aclk)) then
+         mem_rd_count <= mem_rd_count + 1 when mem_rd_en = '1' and mem_rd_valid='1' and mem_rd_ready='1'
+                         else (others => '0');
+         mem_wr_count <= mem_wr_count + 1 when mem_wr_en = '1' and mem_wr_valid='1' and mem_wr_ready='1'
+                         else (others => '0');
+      end if;
+   end process;
+   
+   -- Read address taking into account burst
+   signal mem_rd_addr_adj : std_logic_vector(cpu_addr_width-1 downto 0);
+   mem_rd_addr_adj <= std_logic_vector(unsigned(mem_rd_addr) + (mem_rd_count*4));
+   -- Write address taking into account burst
+   signal mem_wr_addr_adj : std_logic_vector(cpu_addr_width-1 downto 0);
+   mem_wr_addr_adj <= std_logic_vector(unsigned(mem_wr_addr) + (mem_wr_count*4));
+
 
    signal f_this_return: Boolean := false; -- Whether the cache is reading from our memory location
-   f_this_return <= mem_rd_en = '1' and mem_rd_addr = f_addr and mem_rd_ready='1';
+   f_this_return <= mem_rd_en = '1' and mem_rd_addr_adj = f_addr and mem_rd_valid='1';
    signal f_mem_matches: Boolean;
    f_mem_matches <= mem_rd_data = f_data;
-   fa_read_data: assume always prev(f_this_return) -> f_mem_matches;
-   fa_read_stable: assume always (not mem_rd_en) -> stable(mem_rd_data);
+   fa_read_data: assume always f_this_return -> f_mem_matches;
 
    -- Valid signal should appear only when memory is enabled and ready
    fa_valid2: assume always ((mem_rd_valid = '1') = (mem_rd_en = '1' and mem_rd_ready = '1' and stable(mem_rd_ready)));
@@ -64,9 +86,9 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
 
    f_read: assert always (f_cpu_read and f_prev_valid) -> next next_event(not cpu_pause)((cpu_rd_data = f_data));
 
-   fa_mem_write_stable: assert always ((mem_wr_valid and mem_wr_en and stable(mem_wr_en)) -> (stable(mem_wr_addr) and stable(mem_wr_data) and stable(mem_wr_byte_en)));
+   fa_mem_write_stable: assert always ((mem_wr_valid and mem_wr_en and stable(mem_wr_en) and not mem_wr_ready) -> (stable(mem_wr_addr) and stable(mem_wr_data) and stable(mem_wr_byte_en)));
    signal f_mem_write: Boolean; -- The cache is writing to the memory at our location
-   f_mem_write <= mem_wr_valid='1' and mem_wr_en='1' and mem_wr_ready='1' and mem_wr_addr = f_addr;
+   f_mem_write <= mem_wr_valid='1' and mem_wr_en='1' and mem_wr_ready='1' and mem_wr_addr_adj = f_addr;
    f_write_mem_1: assert always (f_mem_write and mem_wr_byte_en(0)) -> ((mem_wr_data(7 downto 0) = f_data(7 downto 0)));
    f_write_mem_2: assert always (f_mem_write and mem_wr_byte_en(1)) -> ((mem_wr_data(15 downto 8) = f_data(15 downto 8)));
    f_write_mem_3: assert always (f_mem_write and mem_wr_byte_en(2)) -> ((mem_wr_data(23 downto 16) = f_data(23 downto 16)));
@@ -106,5 +128,11 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
      (cpu_pause = '0' and cpu_next_address=f_addr);
      {cpu_pause = '1'} [*];
      cpu_pause = '0'
+  };
+
+  c_uncache: cover {
+    (cpu_pause = '0' and cpu_next_address=f_addr and not CacheableRange(f_addr));
+    {cpu_pause = '1'} [+];
+    (cpu_pause = '0' and cpu_rd_data =  f_data)
   };
 }
