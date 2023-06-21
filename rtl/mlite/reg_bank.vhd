@@ -284,6 +284,4 @@ end process;
          );
       end generate; --reg_loop
    end generate; --xilinx_32x1d
-
-
 end; --architecture ram_block

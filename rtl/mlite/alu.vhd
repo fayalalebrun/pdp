@@ -18,17 +18,13 @@ entity alu is
    port(a_in         : in  std_logic_vector(31 downto 0);
         b_in         : in  std_logic_vector(31 downto 0);
         alu_function : in  alu_function_type;
+        sum          : in  std_logic_vector(32 downto 0);
         c_alu        : out std_logic_vector(31 downto 0));
 end; --alu
 
 architecture logic of alu is
-   signal do_add    : std_logic;
-   signal sum       : std_logic_vector(32 downto 0);
    signal less_than : std_logic;
 begin
-
-   do_add <= '1' when alu_function = ALU_ADD else '0';
-   sum <= bv_adder(a_in, b_in, do_add);
    less_than <= sum(32) when a_in(31) = b_in(31) or alu_function = ALU_LESS_THAN 
                 else a_in(31);
 
