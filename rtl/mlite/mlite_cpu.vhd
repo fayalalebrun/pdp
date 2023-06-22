@@ -114,6 +114,7 @@ architecture logic of mlite_cpu is
    signal c_alu          : std_logic_vector(31 downto 0);
    signal c_shift        : std_logic_vector(31 downto 0);
    signal c_mult         : std_logic_vector(31 downto 0);
+   signal c_add          : std_logic_vector(32 downto 0);
    signal c_memory       : std_logic_vector(31 downto 0);
    signal imm            : std_logic_vector(15 downto 0);
    signal pc_future      : std_logic_vector(31 downto 2);
@@ -274,8 +275,16 @@ begin  --architecture
       port map (
         a_in         => a_busD,
         b_in         => b_busD,
+        sum          => c_add,
         alu_function => alu_funcD,
         c_alu        => c_alu);
+
+   u6_5_adder: adder
+      port map (
+        a_in     => a_busD,
+        b_in     => b_busD,
+        sum      => c_add,
+        alu_func => alu_funcD);
 
    u7_shifter: shifter
       generic map (shifter_type => shifter_type)

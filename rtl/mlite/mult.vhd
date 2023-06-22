@@ -52,6 +52,15 @@ entity mult is
 end; --entity mult
 
 architecture logic of mult is
+   component mux4x1 is
+      port(
+         a_single : in STD_LOGIC_VECTOR (31 downto 0);
+         a_double : in STD_LOGIC_VECTOR (32 downto 0);
+         a_triple : in STD_LOGIC_VECTOR (33 downto 0);
+         selA : in STD_LOGIC_VECTOR (1 downto 0);
+         a_out : out STD_LOGIC_VECTOR (33 downto 0)
+      ); 
+   end component;
 
     component mult_array_mult is
         Port ( clk : in std_logic;
@@ -62,18 +71,7 @@ architecture logic of mult is
                sel_signed : in STD_LOGIC;
                c_res : out STD_LOGIC_VECTOR (63 downto 0));
     end component;
-    
-    
-   component mux4x1 is
-      port(
-         a_single : in STD_LOGIC_VECTOR (31 downto 0);
-         a_double : in STD_LOGIC_VECTOR (32 downto 0);
-         a_triple : in STD_LOGIC_VECTOR (33 downto 0);
-         selA : in STD_LOGIC_VECTOR (1 downto 0);
-         a_out : out STD_LOGIC_VECTOR (33 downto 0)
-      ); 
-   end component;
-   
+       
    
    constant MODE_MULT : std_logic := '1';
    constant MODE_DIV  : std_logic := '0';
@@ -111,8 +109,8 @@ architecture logic of mult is
    signal enable_array_mult: std_logic;
    signal sign_or_unsigned: std_logic := '0';
    signal upper_fa_res, lower_fa_res: std_logic_vector(31 downto 0);
+   
    signal fa_res: std_logic_vector(63 downto 0);
-
 begin
     -- mux for radix-4
    m1: mux4x1 
@@ -134,15 +132,14 @@ begin
  
     upper_fa_res <= fa_res(63 downto 32);
     lower_fa_res <= fa_res(31 downto 0);
-    
-                
+
    -- Result
    c_mult <= lower_reg when mult_func = MULT_READ_LO and negate_reg_LO = '0' else 
              bv_negate(lower_reg) when mult_func = MULT_READ_LO and negate_reg_LO = '1' else
              upper_reg when mult_func = MULT_READ_HI and negate_reg_HI = '0' else 
              bv_negate(upper_reg) when mult_func = MULT_READ_HI and negate_reg_HI = '1' else
              ZERO;
-   pause_out <= '1' when (count_reg /= "000000") and 
+   pause_out <= '1' when ( (count_reg /= "000000") ) and 
              (mult_func = MULT_READ_LO or mult_func = MULT_READ_HI) else '0';
 
    -- ABS and remainder signals
@@ -164,7 +161,9 @@ begin
       , upper_fa_res, lower_fa_res)
       variable count : std_logic_vector(2 downto 0);
    begin
-      count := "001";
+      -- Default
+       count := "001";
+
       if reset_in = '1' then
          mode_reg <= '0';
          negate_reg_LO <= '0';
@@ -295,6 +294,7 @@ begin
                count_reg <= "100000";
                negate_reg_LO <= a(31) xor b(31);
                negate_reg_HI <= a(31);
+            
             when others =>
                if count_reg /= "000000" then
                   if mode_reg = MODE_MULT then
@@ -385,6 +385,8 @@ begin
                      bb_reg <= '0' & bb_reg(31 downto 1);
                   end if;
                   count_reg <= std_logic_vector(unsigned(count_reg) - unsigned(count));
+               else
+                  a_select <= "00";
                end if; --count
 
          end case;

@@ -284,30 +284,4 @@ end process;
          );
       end generate; --reg_loop
    end generate; --xilinx_32x1d
-
-   -- Option #4
-   -- RAM32m: 32 x 1 positive edge write, asynchronous read quad-port 
-   xilinx_32m:
-   if memory_type = "XILINX_32M" generate
-   begin
-      reg_loop: for i in 0 to 15 generate
-      begin
-         --Read port 1
-         reg_bit1 : RAM32M
-         port map (
-            WCLK  => clk,
-            WE    => write_enable,
-            ADDRD    => addr_write,
-            DIA      => reg_dest_new(2*i + 1 DOWNTO 2*i),
-            DIB      => reg_dest_new(2*i + 1 DOWNTO 2*i),
-            DIC      => reg_dest_new(2*i + 1 DOWNTO 2*i),
-            DID     => reg_dest_new(2*i + 1 DOWNTO 2*i),
-            ADDRA => addr_read1,
-            DOA   => data_out1(2*i + 1 DOWNTO 2*i),
-            ADDRB => addr_read2,
-            DOB => data_out2(2*i + 1 DOWNTO 2*i)
-         );
-      end generate; --reg_loop
-   end generate; --xilinx_32m
-
 end; --architecture ram_block

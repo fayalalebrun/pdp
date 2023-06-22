@@ -7,7 +7,7 @@ package cpu_pack is
 
     -- default mlite params
     constant default_mult_type            : string  := "DEFAULT";   -- AREA_OPTIMIZED
-    constant default_shifter_type         : string  := "DEFAULT";   -- AREA_OPTIMIZED
+    constant default_shifter_type         : string  := "MUX";   -- AREA_OPTIMIZED
     constant default_alu_type             : string  := "DEFAULT";   -- AREA_OPTIMIZED
 
     -- default cache params
