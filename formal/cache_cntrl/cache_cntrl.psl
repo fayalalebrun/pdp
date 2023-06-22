@@ -109,6 +109,8 @@ vunit i_cache_cntrl(cache_cntrl(Behavioral))
 
    f_cache_data: assert always f_in_cache;
 
+   f_one_hit: assert always (f_location.count <= 1);
+
    f_mem_sigs: assert always (not mem_access_needed) -> not (mem_wr_valid or mem_wr_en or mem_rd_en or mem_rd_ready);
    f_mem_prepared: assert always ((mem_prepared -> (not cache_hit)) and (mem_access_needed -> (not mem_prepared)));
 

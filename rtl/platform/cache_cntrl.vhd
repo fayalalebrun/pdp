@@ -13,10 +13,10 @@ entity cache_cntrl is
         cpu_addr_width       : integer := 32;
         cpu_data_width       : integer := 32;
         -- cache params       
-        cache_way_width      : integer := 0;            -- # blocks per cache line; associativity = 2^cache_way_width
+        cache_way_width      : integer := 2;            -- # blocks per cache line; associativity = 2^cache_way_width
         cache_index_width    : integer := 2;            -- # of cache lines = 2^cache_index_width
         cache_offset_width   : integer := 4;            -- # of bytes per block = 2^cache_offset_width
-        cache_address_width  : integer := 23;           -- address width for cacheable range
+        cache_address_width  : integer := 28;           -- address width for cacheable range
         cache_replace_policy : string := "RR"           -- replacement policy when cache miss: "RR"
     );               
     port ( 
@@ -102,12 +102,14 @@ architecture Behavioral of cache_cntrl is
     type cache_location_t is record
        hit: Boolean;
        way: integer range 0 to 2**cache_way_width-1;
+       count: integer;
     end record cache_location_t;
 
     impure function FindInCache(index: integer; tag: std_logic_vector) return cache_location_t is
        variable hit_buff : Boolean;
        variable way_buff : integer range 0 to 2**cache_way_width-1 := 0;
        variable tag_buff     : std_logic_vector(tag_width-1 downto 0);
+       variable count : integer := 0;
     begin
        hit_buff := False;
        way_buff := 0;
@@ -116,10 +118,10 @@ architecture Behavioral of cache_cntrl is
           if tag_buff=tag and valid_rows(index)(each_way)='1' then
              hit_buff := True;
              way_buff := each_way;
-             exit;
+             count := count + 1;
           end if;
        end loop;
-       return (hit => hit_buff, way => way_buff);
+       return (hit => hit_buff, way => way_buff, count => count);
     end function;
 
     function Index(address: std_logic_vector) return integer is
@@ -210,18 +212,23 @@ begin
           block_rd_addr <= CacheAddr(cpu_index, cpu_way, cpu_offset/4);
        elsif mem_access_needed then
           if mem_rd_en_buff = '0' and (memory_rd_count = 2**word_bits_per_line - 1) then
-                block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
+             -- Right before the read operation has finished
+             block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
           elsif mem_wr_ready = '0' then
+             -- Right after memory_wr_data gets set for first write
              block_rd_addr <= CacheAddr(mem_index, mem_way, 1);
           else
              if (memory_wr_count = 2**word_bits_per_line - 1) then
+                -- Right before write operation has finished
                 block_rd_addr <= CacheAddr(mem_index, mem_way, replace_offset/4);
              else
+                -- Latch right address for next write operation
                 block_rd_addr <= CacheAddr(mem_index, mem_way, memory_wr_count+2);
              end if;
           end if;
        else
-          block_rd_addr <= CacheAddr(cpu_index, mem_way, 0);
+          -- When memory is being prepared
+          block_rd_addr <= CacheAddr(cpu_index, replace_way, 0);
        end if;
 
        if mem_access_needed and mem_rd_handshake and mem_access_exread_block then
