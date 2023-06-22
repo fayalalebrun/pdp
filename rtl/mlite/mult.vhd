@@ -72,7 +72,13 @@ architecture logic of mult is
                c_res : out STD_LOGIC_VECTOR (63 downto 0));
     end component;
        
-   
+   component  adder is
+    port(a_in     : in std_logic_vector(31 downto 0);
+         b_in     : in std_logic_vector(31 downto 0);
+         alu_func : in alu_function_type;
+         sum      : out std_logic_vector(32 downto 0));
+    end component;
+     
    constant MODE_MULT : std_logic := '1';
    constant MODE_DIV  : std_logic := '0';
 
@@ -111,7 +117,16 @@ architecture logic of mult is
    signal upper_fa_res, lower_fa_res: std_logic_vector(31 downto 0);
    
    signal fa_res: std_logic_vector(63 downto 0);
+   
+   signal sig_alu : std_logic_vector(3 downto 0);
 begin
+    sig_alu <= "000" & mode_reg;
+    a1:  adder port map
+        (a_in => upper_reg,
+         b_in => aa_reg,
+         alu_func => sig_alu,
+         sum => sum);
+
     -- mux for radix-4
    m1: mux4x1 
       port map(a_single => aa_reg_r4,
@@ -145,7 +160,7 @@ begin
    -- ABS and remainder signals
    a_neg <= bv_negate(a);
    b_neg <= bv_negate(b);
-   sum <= bv_adder(upper_reg, aa_reg, mode_reg);
+--   sum <= bv_adder(upper_reg, aa_reg, mode_reg);
     
    -- Extra summation for radix-4 multiplication
    r4: if mult_type = "radix_4" generate    
