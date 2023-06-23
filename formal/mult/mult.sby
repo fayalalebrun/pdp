@@ -1,0 +1,26 @@
+[tasks]
+cover
+prove
+
+[options]
+cover: mode cover
+prove: mode prove
+cover: depth 50
+prove: depth 35
+
+[engines]
+smtbmc
+
+[script]
+ghdl -fsynopsys --latches --std=08 mult.vhd mux4x1.vhd mlite_pack.vhd mux2x1.vhd adder.vhd mult.psl flipflop.vhd mult_array_mult.vhd -e mult
+prep -top mult
+
+[files]
+mult.psl
+../../rtl/mlite/mult.vhd
+../../rtl/mlite/mux4x1.vhd
+../../rtl/mlite/mlite_pack.vhd
+../../rtl/mlite/mux2x1.vhd
+../../rtl/mlite/adder.vhd
+../../rtl/mlite/flipflop.vhd
+../../rtl/mlite/mult_array_mult.vhd

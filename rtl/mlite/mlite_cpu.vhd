@@ -73,7 +73,7 @@ use ieee.std_logic_unsigned.all;
 
 entity mlite_cpu is
    generic(memory_type     : string  := "XILINX_16X"; --XILINX_16X, or DUAL_PORT_
-           mult_type       : string  := "DEFAULT"; --AREA_OPTIMIZED
+           mult_type       : string  := "DEFAULT"; --AREA_OPTIMIZED / DEFAULT / radix_4 / FULL_ARRAY
            shifter_type    : string  := "DEFAULT"; --AREA_OPTIMIZED
            alu_type        : string  := "DEFAULT"; --AREA_OPTIMIZED
            pipeline_stages : natural := 2); --2 or 3
