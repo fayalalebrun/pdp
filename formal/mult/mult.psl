@@ -1,0 +1,111 @@
+vunit i_mult(mult(logic))
+{ 
+
+   
+   default clock is rising_edge(clk);
+
+   constant CALC_CLOCKS: integer := 3;
+   -- The expected out given the inputs a and b
+   signal expected_out: std_logic_vector(63 downto 0);
+   signal expected_out_div: std_logic_vector(31 downto 0);
+   -- last expected out before the a function modifying the output was given
+   signal expected_out_latch: std_logic_vector(63 downto 0) := (others => '0');
+
+   signal last_op_latch: mult_function_type := MULT_NOTHING;
+
+   signal read_expect: std_logic_vector(31 downto 0);
+
+   signal no_overwrite: Boolean;
+   signal calc: Boolean;
+   signal read: Boolean;
+   signal write: Boolean;
+
+   -- True when the mult_func does not overwrite register contents
+   no_overwrite <= mult_func = MULT_NOTHING or mult_func = MULT_READ_LO or mult_func = MULT_READ_HI;
+
+   -- True if a calculation is being requested which will require calculation
+   calc <= mult_func = MULT_MULT or mult_func = MULT_SIGNED_MULT; --or mult_func = MULT_DIVIDE or mult_func = MULT_SIGNED_DIVIDE;
+
+   -- True if this is some type of read
+   read <= mult_func = MULT_READ_LO or mult_func = MULT_READ_HI;
+
+   -- True if this is some type of write
+   write <= mult_func = MULT_WRITE_LO or mult_func = MULT_WRITE_HI;
+
+   expected_out_div <= std_logic_vector(unsigned(a) / unsigned(b)) when mult_func = MULT_DIVIDE
+   		    else std_logic_vector(signed(a) / signed(b)) when mult_func = MULT_SIGNED_DIVIDE
+		    else (others => '0');
+
+   last_op_latch <= prev(mult_func);
+
+   expected_out <= std_logic_vector(unsigned(a) * unsigned(b)) when last_op_latch = MULT_MULT
+   		   else std_logic_vector(signed(a) * signed(b)) when last_op_latch = MULT_SIGNED_MULT
+		   else ZERO & expected_out_div when last_op_latch = MULT_DIVIDE or last_op_latch = MULT_SIGNED_DIVIDE
+		   else upper_reg & a when last_op_latch = MULT_WRITE_LO
+		   else a & lower_reg when last_op_latch = MULT_WRITE_HI
+   		   else (others => '0');
+
+   expected_out_latch <= expected_out when not no_overwrite
+   		      else expected_out_latch;
+
+
+
+   read_expect <= prev(expected_out(31 downto 0)) when mult_func = MULT_READ_LO
+   	       else prev(expected_out(63 downto 32)) when mult_func = MULT_READ_HI;
+
+   sequence no_ow_seq is {(not reset_in and no_overwrite)};
+
+   sequence ow_start is {reset_in; (not reset_in and calc)}; -- no_ow_seq
+
+   sequence read_lo_c is {(not reset_in and mult_func=MULT_READ_LO); (pause_out and not reset_in) [*]};
+
+   sequence read_hi_c is {(not reset_in and mult_func=MULT_READ_HI); (pause_out and not reset_in)[*]};
+   
+   f_op_lo : assert {ow_start; read_lo_c; (not pause_out) } |-> {c_mult=prev(expected_out(31 downto 0),CALC_CLOCKS)};
+   f_op_hi : assert {ow_start; read_hi_c; (not pause_out and not reset_in) } |-> {c_mult=prev(expected_out(63 downto 32), CALC_CLOCKS)};
+
+   zero_out: assert always {not (mult_func = MULT_READ_LO or mult_func = MULT_READ_HI)} |-> {c_mult = ZERO};
+
+   -- mult_type: assert mult_type = "FULL_ADDER";
+
+   -- pause_returns: assert always (pause_out and not reset_in) |=> eventually! (not pause_out);
+
+   -- pause_calc: assert always {not reset_in; (not reset_in and calc); (not reset_in and (mult_func = MULT_READ_LO or mult_func = MULT_READ_HI)); not reset_in} |-> pause_out;
+
+
+   f_astable : assume always { pause_out} |-> {stable(a) && stable(prev(a))};
+   f_bstable : assume always { pause_out} |-> {stable(b) && stable(prev(b))};
+   mfunc_stable: assume always { prev(pause_out) } |-> {stable(mult_func)};
+
+   -- Reset in the first cycle
+   f_reset : assume reset_in;
+   -- No more resets after that
+   f_no_reset : assume next (always (not reset_in));
+
+   f_funcs: assume always {mult_func = MULT_NOTHING or mult_func = MULT_READ_LO or
+	    	   mult_func = MULT_READ_HI or mult_func = MULT_WRITE_LO or
+		   mult_func = MULT_WRITE_HI or mult_func = MULT_MULT or
+		   mult_func = MULT_SIGNED_MULT
+--		   or mult_func = MULT_DIVIDE or mult_func = MULT_SIGNED_DIVIDE -- Only test multiplier
+		   };
+
+   f_div_no_zero: assume always ((mult_func = MULT_DIVIDE or mult_func = MULT_SIGNED_DIVIDE) -> (b /= ZERO));
+
+   -- Calc always precedes read
+   f_assume_calc : assume (calc before read);
+
+   f_counter_max : assert always (to_integer(unsigned(count_reg)) <= CALC_CLOCKS);
+
+   
+
+   f_mult: cover {
+      reset_in;
+      mult_func = MULT_SIGNED_MULT;
+      mult_func = MULT_READ_LO;
+      pause_out[*];
+      not pause_out
+   };
+
+
+
+}
